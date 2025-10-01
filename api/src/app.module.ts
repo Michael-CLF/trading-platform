@@ -7,8 +7,12 @@ import { MarketModule } from './market/market.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
-    CacheModule.register({ isGlobal: true }), // <-- only here; global
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [configuration],
+      expandVariables: true,
+    }),
+    CacheModule.register({ isGlobal: true }),
     MarketModule,
   ],
   controllers: [AppController],

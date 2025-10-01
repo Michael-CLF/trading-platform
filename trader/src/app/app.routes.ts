@@ -7,19 +7,9 @@ export const routes: Routes = [
     children: [
       {
         path: 'dashboard',
-        loadComponent: () => import('./core/components/stub/stub').then((m) => m.StubComponent),
-        data: { title: 'Dashboard' },
-      },
-      {
-        path: 'dashboard',
         loadComponent: () =>
           import('./core/components/dashboard/dashboard').then((m) => m.Dashboard),
-      },
-      {
-        path: 'backtests',
-        loadComponent: () =>
-          import('./core/components/backtests/backtests').then((m) => m.BacktestsComponent),
-        data: { title: 'Backtests' },
+        data: { title: 'Dashboard' },
       },
       {
         path: 'positions',
@@ -27,21 +17,17 @@ export const routes: Routes = [
           import('./core/components/positions/positions').then((m) => m.PositionsComponent),
         data: { title: 'Positions' },
       },
-
       {
         path: 'signals',
-        loadComponent: () => import('./core/components/stub/stub').then((m) => m.StubComponent),
+        loadComponent: () =>
+          import('./core/components/signals/signals').then((m) => m.SignalsComponent),
         data: { title: 'Signals' },
       },
       {
         path: 'backtests',
-        loadComponent: () => import('./core/components/stub/stub').then((m) => m.StubComponent),
+        loadComponent: () =>
+          import('./core/components/backtests/backtests').then((m) => m.BacktestsComponent),
         data: { title: 'Backtests' },
-      },
-      {
-        path: 'positions',
-        loadComponent: () => import('./core/components/stub/stub').then((m) => m.StubComponent),
-        data: { title: 'Positions' },
       },
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
       { path: '**', redirectTo: 'dashboard' },

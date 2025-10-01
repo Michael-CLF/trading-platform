@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, Matches } from 'class-validator';
+import { IsEnum, IsOptional, IsString, Matches } from 'class-validator';
 
 export class QuoteQueryDto {
   @IsString()
@@ -11,13 +11,27 @@ export class BarsQueryDto {
   @Matches(/^[A-Z.\-]{1,10}$/)
   symbol!: string;
 
-  @IsIn(['1m', '5m', '15m', '30m', '1h', '1d'])
+  @IsEnum({
+    '1m': '1m',
+    '5m': '5m',
+    '15m': '15m',
+    '30m': '30m',
+    '1h': '1h',
+    '1d': '1d',
+  })
   interval!: '1m' | '5m' | '15m' | '30m' | '1h' | '1d';
 
-  @IsIn(['1d', '5d', '1mo', '3mo', '6mo', '1y'])
+  @IsEnum({
+    '1d': '1d',
+    '5d': '5d',
+    '1mo': '1mo',
+    '3mo': '3mo',
+    '6mo': '6mo',
+    '1y': '1y',
+  })
   range!: '1d' | '5d' | '1mo' | '3mo' | '6mo' | '1y';
 
   @IsOptional()
   @IsString()
-  timezone?: string; // e.g., 'America/New_York'
+  timezone?: string;
 }

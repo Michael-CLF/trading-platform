@@ -10,7 +10,6 @@ export class MarketController {
   getQuote(@Query() q: QuoteQueryDto) {
     return this.market.getQuote(q.symbol);
   }
-
   @Get('bars')
   getBars(@Query() q: BarsQueryDto) {
     return this.market.getBars(q.symbol, q.interval, q.range, q.timezone);
