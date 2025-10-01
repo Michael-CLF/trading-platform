@@ -1,0 +1,30 @@
+<section class="space-y-4">
+    <h1 class="text-2xl font-semibold">Dashboard</h1>
+
+    <div *ngIf="loading(); else tableTpl" class="opacity-70">Loading…</div>
+
+    <ng-template #tableTpl>
+        <div class="overflow-x-auto rounded-lg border border-white/10">
+            <table class="min-w-full text-sm">
+                <thead class="bg-white/5">
+                    <tr>
+                        <th class="text-left px-4 py-2">Symbol</th>
+                        <th class="text-left px-4 py-2">Action</th>
+                        <th class="text-left px-4 py-2">Confidence</th>
+                        <th class="text-left px-4 py-2">When</th>
+                        <th class="text-left px-4 py-2">Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr *ngFor="let s of rows()" class="border-t border-white/10">
+                        <td class="px-4 py-2 font-medium">{{ s.symbol }}</td>
+                        <td class="px-4 py-2 capitalize">{{ s.action }}</td>
+                        <td class="px-4 py-2">{{ (s.confidence * 100) | number:'1.0-0' }}%</td>
+                        <td class="px-4 py-2">{{ s.timestamp | date:'yyyy-MM-dd HH:mm' }}</td>
+                        <td class="px-4 py-2 opacity-80">{{ s.reason || '—' }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </ng-template>
+</section>

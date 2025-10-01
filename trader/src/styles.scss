@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary: #02474d;
+  --color-accent: #ff2a00;
+  --color-bg: #0f1115;
+  --color-surface: #161a20;
+  --color-text: #e6e6e6;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* Your global design variables */
+:root {
+  --color-primary: #02474d;
+  --color-accent: #ff2a00;
+  --color-bg: #0f1115;
+  --color-surface: #161a20;
+  --color-text: #e6e6e6;
+  --error-text: #c00000;
+}
+
+/* Apply defaults */
+html,
+body {
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text);
+}

@@ -1,0 +1,42 @@
+[
+    {
+        "symbol": "AAPL",
+        "qty": 120,
+        "avgPrice": 172.35,
+        "lastPrice": 181.42,
+        "costBasis": 20682.0,
+        "marketValue": 21770.4,
+        "pnl": 1088.4,
+        "pnlPct": 0.0526
+    },
+    {
+        "symbol": "MSFT",
+        "qty": 75,
+        "avgPrice": 395.10,
+        "lastPrice": 402.80,
+        "costBasis": 29632.5,
+        "marketValue": 30210.0,
+        "pnl": 577.5,
+        "pnlPct": 0.0195
+    },
+    {
+        "symbol": "NVDA",
+        "qty": 30,
+        "avgPrice": 115.25,
+        "lastPrice": 121.70,
+        "costBasis": 3457.5,
+        "marketValue": 3651.0,
+        "pnl": 193.5,
+        "pnlPct": 0.0560
+    },
+    {
+        "symbol": "SPY",
+        "qty": 40,
+        "avgPrice": 525.00,
+        "lastPrice": 520.10,
+        "costBasis": 21000.0,
+        "marketValue": 20804.0,
+        "pnl": -196.0,
+        "pnlPct": -0.0093
+    }
+]
