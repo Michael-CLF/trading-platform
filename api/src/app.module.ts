@@ -1,10 +1,16 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { CacheModule } from '@nestjs/cache-manager';
+import configuration from './config/configuration';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { MarketModule } from './market/market.module';
 
 @Module({
-  imports: [],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
+    CacheModule.register({ isGlobal: true }), // <-- only here; global
+    MarketModule,
+  ],
   controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}
