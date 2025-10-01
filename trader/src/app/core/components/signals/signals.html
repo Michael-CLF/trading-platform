@@ -16,6 +16,10 @@
                 <option value="sell">Sell</option>
             </select>
         </div>
+        <div *ngIf="!loading() && filtered().length === 0" class="opacity-70 p-4">
+            No signals for the selected criteria.
+        </div>
+
     </header>
 
     <div *ngIf="loading(); else tableTpl" class="opacity-70">Loading…</div>

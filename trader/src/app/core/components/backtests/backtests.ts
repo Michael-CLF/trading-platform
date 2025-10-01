@@ -1,5 +1,5 @@
 // src/app/core/components/backtests/backtests.ts
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 import { MarketDataService, UiBar } from '../../services/market-data.service';
@@ -20,7 +20,7 @@ interface BacktestResult {
   templateUrl: './backtests.html',
   styleUrls: ['./backtests.scss'],
 })
-export class BacktestsComponent {
+export class BacktestsComponent implements OnInit {
   private market = inject(MarketDataService);
 
   loading = signal<boolean>(true);

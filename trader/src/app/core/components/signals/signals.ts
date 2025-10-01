@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -15,7 +15,7 @@ import { map } from 'rxjs/operators';
   templateUrl: './signals.html',
   styleUrls: ['./signals.scss'],
 })
-export class SignalsComponent {
+export class SignalsComponent implements OnInit {
   private market = inject(MarketDataService);
 
   loading = signal<boolean>(true);

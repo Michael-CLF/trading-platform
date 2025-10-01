@@ -1,5 +1,5 @@
 // src/app/core/components/positions/positions.ts
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule, DecimalPipe, PercentPipe, CurrencyPipe } from '@angular/common';
 import { MarketDataService, UiBar } from '../../services/market-data.service';
 import { Quote } from '../../shared/models/quote.model';
@@ -22,7 +22,7 @@ export interface Position {
   templateUrl: './positions.html',
   styleUrls: ['./positions.scss'],
 })
-export class PositionsComponent {
+export class PositionsComponent implements OnInit {
   private market = inject(MarketDataService);
 
   loading = signal<boolean>(true);
