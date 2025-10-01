@@ -1,15 +1,25 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { QuoteBarResponse, Ticker } from '../shared/models/market.models';
+import { Quote } from '../shared/models/quote.model';
+import { BarsResponse } from '../shared/models/bar.model';
+import { environment } from '../../../environments/environment.development';
 
 @Injectable({ providedIn: 'root' })
 export class MarketDataService {
   private http = inject(HttpClient);
+  private baseUrl = environment.apiBaseUrl;
 
-  /** GET /market/bars?symbol=SPY&range=1y&interval=1d (relative URL; interceptor prefixes) */
-  getDailyBars(symbol: Ticker, range = '1y'): Observable<QuoteBarResponse> {
-    const url = `/market/bars?symbol=${encodeURIComponent(symbol)}&range=${range}&interval=1d`;
-    return this.http.get<QuoteBarResponse>(url);
+  getQuote(symbol: string) {
+    return this.http.get<Quote>(`${this.baseUrl}/market/quote`, {
+      params: { symbol },
+    });
+  }
+
+  getBars(symbol: string, interval: string, range: string, timezone: string) {
+    return this.http.get<any>(`${this.baseUrl}/market/bars`, {
+      params: { symbol, interval, range, timezone },
+    });
   }
 }

@@ -1,7 +1,9 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Signal } from '../../shared/models/signal.models';
 import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
+import { Quote } from '../../shared/models/quote.model';
+import { MarketDataService } from '../../services/market-data.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -10,17 +12,34 @@ import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
   templateUrl: './dashboard.html',
   styleUrls: ['./dashboard.scss'],
 })
-export class DashboardComponent {
+export class Dashboard implements OnInit {
   private http = inject(HttpClient);
+  private market = inject(MarketDataService);
+
   loading = signal<boolean>(true);
   rows = signal<Signal[]>([]);
+  quote = signal<Quote | null>(null);
+  error = signal<string | null>(null);
 
-  ngOnInit() {
-    // TEMP: load mock signals from assets
-    this.http.get<{ signals: Signal[] }>('/assets/mock/signals.json').subscribe({
-      next: (res) => this.rows.set(res.signals),
-      error: () => this.rows.set([]),
-      complete: () => this.loading.set(false),
+  readonly defaultSymbol = 'AAPL';
+
+  ngOnInit(): void {
+    this.fetchQuote(this.defaultSymbol);
+  }
+
+  fetchQuote(symbol: string) {
+    this.loading.set(true);
+    this.error.set(null);
+
+    this.market.getQuote(symbol).subscribe({
+      next: (q: Quote) => {
+        this.quote.set(q);
+        this.loading.set(false);
+      },
+      error: (err) => {
+        this.error.set(err?.error?.message ?? 'Failed to load quote');
+        this.loading.set(false);
+      },
     });
   }
 }

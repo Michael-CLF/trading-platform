@@ -1,30 +1,28 @@
 <section class="space-y-4">
-    <h1 class="text-2xl font-semibold">Dashboard</h1>
+    <h1 class="text-xl font-semibold">Dashboard</h1>
 
-    <div *ngIf="loading(); else tableTpl" class="opacity-70">Loading…</div>
+    <ng-container *ngIf="loading(); else dataTpl">
+        <div class="opacity-70 text-sm">Loading…</div>
+    </ng-container>
 
-    <ng-template #tableTpl>
-        <div class="overflow-x-auto rounded-lg border border-white/10">
-            <table class="min-w-full text-sm">
-                <thead class="bg-white/5">
-                    <tr>
-                        <th class="text-left px-4 py-2">Symbol</th>
-                        <th class="text-left px-4 py-2">Action</th>
-                        <th class="text-left px-4 py-2">Confidence</th>
-                        <th class="text-left px-4 py-2">When</th>
-                        <th class="text-left px-4 py-2">Reason</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr *ngFor="let s of rows()" class="border-t border-white/10">
-                        <td class="px-4 py-2 font-medium">{{ s.symbol }}</td>
-                        <td class="px-4 py-2 capitalize">{{ s.action }}</td>
-                        <td class="px-4 py-2">{{ (s.confidence * 100) | number:'1.0-0' }}%</td>
-                        <td class="px-4 py-2">{{ s.timestamp | date:'yyyy-MM-dd HH:mm' }}</td>
-                        <td class="px-4 py-2 opacity-80">{{ s.reason || '—' }}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+    <ng-template #dataTpl>
+        <ng-container *ngIf="quote(); else errorTpl">
+            <div class="rounded-lg border border-white/10 p-4">
+                <div class="text-sm opacity-70">{{ quote()?.symbol }}</div>
+                <div class="mt-1 text-3xl font-semibold">
+                    {{ quote()?.price | number:'1.2-2' }}
+                    <span class="ml-2 text-sm" [class.text-green-400]="(quote()?.change ?? 0) >= 0"
+                        [class.text-red-400]="(quote()?.change ?? 0) < 0">
+                        {{ quote()?.change | number:'1.2-2' }}
+                        ({{ quote()?.changePct | number:'1.2-2' }}%)
+                    </span>
+                </div>
+                <div class="mt-1 text-xs opacity-60">as of {{ quote()?.asOf | date:'yyyy-MM-dd HH:mm' }}</div>
+            </div>
+        </ng-container>
+    </ng-template>
+
+    <ng-template #errorTpl>
+        <div class="text-red-400 text-sm">{{ error() }}</div>
     </ng-template>
 </section>
