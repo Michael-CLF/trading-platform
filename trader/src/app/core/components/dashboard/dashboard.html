@@ -1,23 +1,33 @@
 <section class="space-y-4">
     <h1 class="text-xl font-semibold">Dashboard</h1>
 
-    <ng-container *ngIf="loading(); else dataTpl">
+    <ng-container *ngIf="loading(); else contentTpl">
         <div class="opacity-70 text-sm">Loading…</div>
     </ng-container>
 
-    <ng-template #dataTpl>
-        <ng-container *ngIf="quote(); else errorTpl">
-            <div class="rounded-lg border border-white/10 p-4">
-                <div class="text-sm opacity-70">{{ quote()?.symbol }}</div>
-                <div class="mt-1 text-3xl font-semibold">
-                    {{ quote()?.price | number:'1.2-2' }}
-                    <span class="ml-2 text-sm" [class.text-green-400]="(quote()?.change ?? 0) >= 0"
-                        [class.text-red-400]="(quote()?.change ?? 0) < 0">
-                        {{ quote()?.change | number:'1.2-2' }}
-                        ({{ quote()?.changePct | number:'1.2-2' }}%)
-                    </span>
+    <ng-template #contentTpl>
+        <ng-container *ngIf="!error(); else errorTpl">
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div class="rounded-lg border border-white/10 p-4" *ngFor="let q of quotes()">
+                    <div class="flex items-center justify-between">
+                        <div class="text-sm opacity-70">{{ q.symbol }}</div>
+                        <div class="text-xs px-2 py-0.5 rounded" [ngClass]="{
+   'bg-green-500/20': (q?.change ?? 0) >= 0,
+    'bg-red-500/20' : (q?.change ?? 0) < 0
+  }">
+                            {{ q.changePct | number:'1.2-2' }}%
+                        </div>
+
+                    </div>
+
+                    <div class="mt-1 text-2xl font-semibold">
+                        {{ q.price | number:'1.2-2' }}
+                    </div>
+
+                    <div class="mt-1 text-xs opacity-60">
+                        {{ q.asOf | date:'yyyy-MM-dd HH:mm' }}
+                    </div>
                 </div>
-                <div class="mt-1 text-xs opacity-60">as of {{ quote()?.asOf | date:'yyyy-MM-dd HH:mm' }}</div>
             </div>
         </ng-container>
     </ng-template>

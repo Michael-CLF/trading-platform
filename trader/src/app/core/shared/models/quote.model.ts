@@ -1,11 +1,10 @@
+// Keep this tiny and provider-agnostic
 export interface Quote {
-  symbol: string;
-  price: number;
-  open?: number;
-  high?: number;
-  low?: number;
-  prevClose?: number;
-  change?: number; // absolute change
-  changePct?: number; // percent change
-  asOf: string; // ISO timestamp
+  symbol: string; // e.g. "AAPL"
+  price: number; // last trade or latest close/agg price
+  change?: number; // price - previousClose
+  changePct?: number; // (change / previousClose) * 100
+  previousClose?: number;
+  asOf: string; // ISO timestamp for when price was observed
+  provider?: string; // "polygon" | "alpha_vantage" | etc. (optional)
 }

@@ -1,6 +1,8 @@
+// src/app/core/components/positions/positions.ts
 import { Component, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { CommonModule, DecimalPipe, PercentPipe, CurrencyPipe } from '@angular/common';
+import { MarketDataService, UiBar } from '../../services/market-data.service';
+import { Quote } from '../../shared/models/quote.model';
 
 export interface Position {
   symbol: string;
@@ -9,8 +11,8 @@ export interface Position {
   lastPrice: number;
   costBasis: number;
   marketValue: number;
-  pnl: number; // absolute P/L
-  pnlPct: number; // 0..1 (e.g., 0.052 = 5.2%)
+  pnl: number;
+  pnlPct: number;
 }
 
 @Component({
@@ -21,31 +23,55 @@ export interface Position {
   styleUrls: ['./positions.scss'],
 })
 export class PositionsComponent {
-  private http = inject(HttpClient);
+  private market = inject(MarketDataService);
 
-  loading = signal(true);
+  loading = signal<boolean>(true);
   rows = signal<Position[]>([]);
+  bars = signal<UiBar[]>([]);
+  quote = signal<Quote | null>(null);
 
-  ngOnInit() {
-    this.http.get<Position[]>('/assets/mock/positions.json').subscribe({
-      next: (res) => {
-        this.rows.set(res);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.rows.set([]);
-        this.loading.set(false); // <-- end loading on error
-      },
+  ngOnInit(): void {
+    // Replace mock call with real data calls
+    this.market.getBarsForUi('AAPL', '15m', '5d', 'America/New_York').subscribe(() => {
+      // Example synthetic “positions” until you have a real endpoint:
+      // derive a row from the latest bar + quote so the table is not empty
+      this.market.getQuote('AAPL').subscribe((q) => {
+        if (q) {
+          const last = q.price ?? 0;
+          const qty = 10;
+          const avgPrice = last * 0.98;
+          const costBasis = qty * avgPrice;
+          const marketValue = qty * last;
+          const pnl = marketValue - costBasis;
+          const pnlPct = costBasis ? pnl / costBasis : 0;
+
+          this.rows.set([
+            {
+              symbol: 'AAPL',
+              qty,
+              avgPrice,
+              lastPrice: last,
+              costBasis,
+              marketValue,
+              pnl,
+              pnlPct,
+            },
+          ]);
+
+          this.quote.set(q);
+          this.loading.set(false);
+        }
+      });
     });
   }
 
-  totalCostBasis() {
-    return this.rows().reduce((sum, p) => sum + p.costBasis, 0);
+  totalCostBasis(): number {
+    return this.rows().reduce((sum, p) => sum + (p?.costBasis ?? 0), 0);
   }
-  totalMarketValue() {
-    return this.rows().reduce((sum, p) => sum + p.marketValue, 0);
+  totalMarketValue(): number {
+    return this.rows().reduce((sum, p) => sum + (p?.marketValue ?? 0), 0);
   }
-  totalPnL() {
-    return this.rows().reduce((sum, p) => sum + p.pnl, 0);
+  totalPnL(): number {
+    return this.rows().reduce((sum, p) => sum + (p?.pnl ?? 0), 0);
   }
 }

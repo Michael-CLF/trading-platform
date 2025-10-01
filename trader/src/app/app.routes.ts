@@ -13,7 +13,7 @@ export const routes: Routes = [
       {
         path: 'dashboard',
         loadComponent: () =>
-          import('./core/components/dashboard/dashboard').then((m) => m.DashboardComponent),
+          import('./core/components/dashboard/dashboard').then((m) => m.Dashboard),
       },
       {
         path: 'backtests',
