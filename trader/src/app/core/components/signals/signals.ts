@@ -1,4 +1,3 @@
-// src/app/core/components/signals/signals.ts
 import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -24,11 +23,10 @@ export class SignalsComponent {
   action = signal<SignalAction | ''>(''); // action filter
   rows = signal<Signal[]>([]);
 
-  // Adjust to your watchlist
+  // adjust to your watchlist (or inject from config)
   private readonly symbols = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL'];
 
   ngOnInit(): void {
-    // Fetch 15m bars for each symbol (Polygon -> backend -> here)
     const calls: Observable<[string, UiBar[]]>[] = this.symbols.map((sym) =>
       this.market
         .getBarsForUi(sym, '15m', '5d', 'America/New_York')
@@ -39,7 +37,7 @@ export class SignalsComponent {
       next: (results) => {
         const out: Signal[] = [];
         for (const [sym, bars] of results) {
-          const sig = computeSmaSignal(sym, bars, 5, 20); // 5/20 SMA cross
+          const sig = computeSmaSignal(sym, bars, 5, 20);
           if (sig) out.push(sig);
         }
         this.rows.set(out);
@@ -63,11 +61,12 @@ export class SignalsComponent {
   });
 }
 
-/** Simple SMA crossover signal. Uses LOWERCASE actions to match SignalAction. */
+/** 5/20 SMA crossover; returns Signal with confidence/timestamp/reason */
 function computeSmaSignal(symbol: string, bars: UiBar[], fast = 5, slow = 20): Signal | null {
   if (!bars || bars.length < slow + 1) return null;
 
   const closes = bars.map((b) => b.close);
+
   const sma = (arr: number[], n: number, idx: number) =>
     arr.slice(idx - n + 1, idx + 1).reduce((s, x) => s + x, 0) / n;
 
@@ -78,16 +77,24 @@ function computeSmaSignal(symbol: string, bars: UiBar[], fast = 5, slow = 20): S
   const slowNow = sma(closes, slow, i);
 
   let action: SignalAction | null = null;
-  if (fastPrev <= slowPrev && fastNow > slowNow) action = 'buy' as SignalAction;
-  if (fastPrev >= slowPrev && fastNow < slowNow) action = 'sell' as SignalAction;
+  if (fastPrev <= slowPrev && fastNow > slowNow) action = 'buy';
+  if (fastPrev >= slowPrev && fastNow < slowNow) action = 'sell';
   if (!action) return null;
 
-  // NOTE: your Signal type doesn't have `when`, so we don't set it.
+  // Simple confidence: normalized distance between SMAs (0..1)
+  const dist = Math.abs(fastNow - slowNow);
+  const norm = Math.max(1e-6, Math.abs(closes[i])); // prevent /0
+  const confidence = Math.min(1, (dist / norm) * 10); // scale a bit
+
+  const reason = `${fast}/${slow} SMA cross (${action})`;
+
   const sig: Signal = {
     symbol,
     action, // 'buy' | 'sell'
     price: bars[i].close,
-    note: `${fast}/${slow} SMA cross`,
+    confidence, // 👈 used by template
+    timestamp: bars[i].time, // 👈 used by template
+    reason, // 👈 used by template
   };
   return sig;
 }
