@@ -1,12 +1,18 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-
+import { firstValueFrom } from 'rxjs';
 import { MarketDataService, UiBar } from '../../services/market-data.service';
-import { Signal, SignalAction } from '../../shared/models/signal.models';
 
-import { forkJoin, Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+export type SignalAction = 'buy' | 'sell';
+export interface SignalRow {
+  symbol: string;
+  action: SignalAction;
+  price: number;
+  timestamp: string;
+  reason?: string;
+  confidence?: number;
+}
 
 @Component({
   selector: 'app-signals',
@@ -15,86 +21,76 @@ import { map } from 'rxjs/operators';
   templateUrl: './signals.html',
   styleUrls: ['./signals.scss'],
 })
-export class SignalsComponent implements OnInit {
+export class SignalsComponent {
   private market = inject(MarketDataService);
 
-  loading = signal<boolean>(true);
-  query = signal<string>(''); // symbol search
-  action = signal<SignalAction | ''>(''); // action filter
-  rows = signal<Signal[]>([]);
+  loading = signal(true);
+  query = signal<string>('');
+  action = signal<SignalAction | ''>('');
+  rows = signal<SignalRow[]>([]);
 
-  // adjust to your watchlist (or inject from config)
-  private readonly symbols = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL'];
+  private readonly symbols = ['AAPL', 'MSFT', 'NVDA'];
 
-  ngOnInit(): void {
-    const calls: Observable<[string, UiBar[]]>[] = this.symbols.map((sym) =>
-      this.market
-        .getBarsForUi(sym, '15m', '5d', 'America/New_York')
-        .pipe(map((bars) => [sym, bars] as [string, UiBar[]])),
-    );
+  async ngOnInit() {
+    this.loading.set(true);
+    const out: SignalRow[] = [];
 
-    forkJoin(calls).subscribe({
-      next: (results) => {
-        const out: Signal[] = [];
-        for (const [sym, bars] of results) {
-          const sig = computeSmaSignal(sym, bars, 5, 20);
-          if (sig) out.push(sig);
-        }
-        this.rows.set(out);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.rows.set([]);
-        this.loading.set(false);
-      },
-    });
+    for (const s of this.symbols) {
+      const bars = await firstValueFrom(
+        this.market.getBarsForUi(s, '15m', '5d', 'America/New_York'),
+      );
+      if (bars.length < 30) continue;
+      const sig = computeSmaSignal(s, bars, 5, 20);
+      if (sig) out.push(sig);
+    }
+
+    this.rows.set(out);
+    this.loading.set(false);
+  }
+
+  onQueryChange(v: string) {
+    this.query.set(v ?? '');
+  }
+  onActionChange(v: '' | SignalAction) {
+    this.action.set(v ?? '');
   }
 
   filtered = computed(() => {
     const q = this.query().trim().toUpperCase();
     const a = this.action();
-    return this.rows().filter((s) => {
-      const matchSymbol = q ? s.symbol.toUpperCase().includes(q) : true;
-      const matchAction = a ? s.action === a : true;
-      return matchSymbol && matchAction;
-    });
+    return this.rows().filter(
+      (row) => (q ? row.symbol.toUpperCase().includes(q) : true) && (a ? row.action === a : true),
+    );
   });
 }
 
-/** 5/20 SMA crossover; returns Signal with confidence/timestamp/reason */
-function computeSmaSignal(symbol: string, bars: UiBar[], fast = 5, slow = 20): Signal | null {
-  if (!bars || bars.length < slow + 1) return null;
+function sma(closes: number[], n: number, i: number) {
+  if (i + 1 < n) return NaN;
+  let sum = 0;
+  for (let k = i - n + 1; k <= i; k++) sum += closes[k];
+  return sum / n;
+}
 
+function computeSmaSignal(symbol: string, bars: UiBar[], fast = 5, slow = 20): SignalRow | null {
   const closes = bars.map((b) => b.close);
-
-  const sma = (arr: number[], n: number, idx: number) =>
-    arr.slice(idx - n + 1, idx + 1).reduce((s, x) => s + x, 0) / n;
-
   const i = closes.length - 1;
-  const fastPrev = sma(closes, fast, i - 1);
-  const slowPrev = sma(closes, slow, i - 1);
-  const fastNow = sma(closes, fast, i);
-  const slowNow = sma(closes, slow, i);
+  const fNow = sma(closes, fast, i),
+    sNow = sma(closes, slow, i);
+  const fPrev = sma(closes, fast, i - 1),
+    sPrev = sma(closes, slow, i - 1);
+  if (![fNow, sNow, fPrev, sPrev].every(isFinite)) return null;
 
   let action: SignalAction | null = null;
-  if (fastPrev <= slowPrev && fastNow > slowNow) action = 'buy';
-  if (fastPrev >= slowPrev && fastNow < slowNow) action = 'sell';
+  if (fPrev <= sPrev && fNow > sNow) action = 'buy';
+  if (fPrev >= sPrev && fNow < sNow) action = 'sell';
   if (!action) return null;
 
-  // Simple confidence: normalized distance between SMAs (0..1)
-  const dist = Math.abs(fastNow - slowNow);
-  const norm = Math.max(1e-6, Math.abs(closes[i])); // prevent /0
-  const confidence = Math.min(1, (dist / norm) * 10); // scale a bit
-
-  const reason = `${fast}/${slow} SMA cross (${action})`;
-
-  const sig: Signal = {
+  return {
     symbol,
-    action, // 'buy' | 'sell'
+    action,
     price: bars[i].close,
-    confidence, // 👈 used by template
-    timestamp: bars[i].time, // 👈 used by template
-    reason, // 👈 used by template
+    timestamp: bars[i].time,
+    reason: `${fast}/${slow} SMA cross`,
+    confidence: 0.6,
   };
-  return sig;
 }

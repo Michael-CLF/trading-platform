@@ -1,54 +1,43 @@
-<section class="space-y-4">
-    <h1 class="text-2xl font-semibold">Positions</h1>
+<div class="p-6">
+    <h2 class="text-xl mb-4">Positions</h2>
 
-    <!-- Loading -->
-    <div *ngIf="loading(); else tableTpl" class="opacity-70">Loading…</div>
+    <div *ngIf="loading()">Loading…</div>
 
-    <ng-template #tableTpl>
-        <div class="overflow-x-auto rounded-lg border border-white/10">
-            <table class="min-w-full text-sm">
-                <thead class="bg-white/5">
-                    <tr>
-                        <th class="text-left px-4 py-2">Symbol</th>
-                        <th class="text-right px-4 py-2">Qty</th>
-                        <th class="text-right px-4 py-2">Avg Price</th>
-                        <th class="text-right px-4 py-2">Last</th>
-                        <th class="text-right px-4 py-2">Cost Basis</th>
-                        <th class="text-right px-4 py-2">Market Value</th>
-                        <th class="text-right px-4 py-2">P/L</th>
-                        <th class="text-right px-4 py-2">P/L %</th>
-                    </tr>
-                </thead>
+    <table *ngIf="!loading() && rows().length" class="w-full border-collapse">
+        <thead>
+            <tr class="text-left border-b border-gray-700">
+                <th class="py-2 px-3">Symbol</th>
+                <th class="py-2 px-3">Qty</th>
+                <th class="py-2 px-3">Avg Price</th>
+                <th class="py-2 px-3">Last</th>
+                <th class="py-2 px-3">Cost Basis</th>
+                <th class="py-2 px-3">Market Value</th>
+                <th class="py-2 px-3">P/L</th>
+                <th class="py-2 px-3">P/L %</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr *ngFor="let r of rows()">
+                <td class="py-2 px-3">{{ r.symbol }}</td>
+                <td class="py-2 px-3">{{ r.qty | number:'1.0-0' }}</td>
+                <td class="py-2 px-3">{{ r.avgPrice | currency:'USD':'symbol':'1.2-2' }}</td>
+                <td class="py-2 px-3">{{ r.lastPrice | currency:'USD':'symbol':'1.2-2' }}</td>
+                <td class="py-2 px-3">{{ r.costBasis | currency:'USD':'symbol':'1.2-2' }}</td>
+                <td class="py-2 px-3">{{ r.marketValue | currency:'USD':'symbol':'1.2-2' }}</td>
+                <td class="py-2 px-3">{{ r.pnl | currency:'USD':'symbol':'1.2-2' }}</td>
+                <td class="py-2 px-3">{{ r.pnlPct | percent:'1.1-2' }}</td>
+            </tr>
+        </tbody>
+        <tfoot class="border-t border-gray-700">
+            <tr>
+                <td class="py-2 px-3" colspan="4">Totals</td>
+                <td class="py-2 px-3">{{ totalCostBasis() | currency:'USD' }}</td>
+                <td class="py-2 px-3">{{ totalMarketValue() | currency:'USD' }}</td>
+                <td class="py-2 px-3">{{ totalPnL() | currency:'USD' }}</td>
+                <td class="py-2 px-3"></td>
+            </tr>
+        </tfoot>
+    </table>
 
-                <tbody>
-                    <tr *ngFor="let p of rows()" class="border-t border-white/10">
-                        <td class="px-4 py-2 font-medium">{{ p.symbol }}</td>
-                        <td class="px-4 py-2 text-right">{{ p.qty | number:'1.0-0' }}</td>
-                        <td class="px-4 py-2 text-right">{{ p.avgPrice | currency:'USD':'symbol':'1.2-2' }}</td>
-                        <td class="px-4 py-2 text-right">{{ p.lastPrice | currency:'USD':'symbol':'1.2-2' }}</td>
-                        <td class="px-4 py-2 text-right">{{ p.costBasis | currency:'USD':'symbol':'1.0-0' }}</td>
-                        <td class="px-4 py-2 text-right">{{ p.marketValue | currency:'USD':'symbol':'1.0-0' }}</td>
-                        <td class="px-4 py-2 text-right" [class]="p.pnl >= 0 ? 'text-green-400' : 'text-red-400'">
-                            {{ p.pnl | currency:'USD':'symbol':'1.0-0' }}
-                        </td>
-                        <td class="px-4 py-2 text-right" [class]="p.pnlPct >= 0 ? 'text-green-400' : 'text-red-400'">
-                            {{ p.pnlPct | percent:'1.1-1' }}
-                        </td>
-                    </tr>
-                </tbody>
-
-                <tfoot class="bg-white/[0.03] border-t border-white/10">
-                    <tr>
-                        <th class="px-4 py-2 text-left" colspan="4">Totals</th>
-                        <th class="px-4 py-2 text-right">{{ totalCostBasis() | currency:'USD':'symbol':'1.0-0' }}</th>
-                        <th class="px-4 py-2 text-right">{{ totalMarketValue() | currency:'USD':'symbol':'1.0-0' }}</th>
-                        <th class="px-4 py-2 text-right" [class]="totalPnL() >= 0 ? 'text-green-400' : 'text-red-400'">
-                            {{ totalPnL() | currency:'USD':'symbol':'1.0-0' }}
-                        </th>
-                        <th class="px-4 py-2"></th>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    </ng-template>
-</section>
+    <div *ngIf="!loading() && !rows().length" class="opacity-70">No positions.</div>
+</div>

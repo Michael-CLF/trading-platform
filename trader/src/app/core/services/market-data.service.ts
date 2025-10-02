@@ -1,94 +1,75 @@
-// src/app/core/services/market-data.service.ts
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
+import { environment } from '../../../environments/environment.development';
 
-// ✅ correct relative paths from core/services → environments & shared
-import { environment } from '../../../environments/environment';
-import { Quote } from '../shared/models/quote.model';
-
-import { map } from 'rxjs/operators';
-import { Observable } from 'rxjs';
-
-// Backend/Polygon-friendly shape (what /market/bars should return)
-export interface BarsResponse {
+export interface Quote {
   symbol: string;
-  interval: string; // e.g. "15m"
-  range: string; // e.g. "5d"
-  timezone?: string;
-  provider?: string; // "polygon" | "alpha_vantage" | etc.
-  points: Array<{
-    t: string; // ISO or epoch mapped to ISO in backend
-    o: number;
-    h: number;
-    l: number;
-    c: number;
-    v?: number;
-  }>;
+  price: number | null;
+  currency: 'USD';
+  asOf: string; // ISO
+  provider: 'polygon';
 }
 
-// Optional UI-friendly bar type if you want pretty names in components
+export interface BarsResponse {
+  symbol: string;
+  interval: string;
+  range: string;
+  timezone?: string;
+  provider: 'polygon';
+  points: Array<{ t: string; o: number; h: number; l: number; c: number; v: number }>;
+}
+
 export interface UiBar {
-  time: string; // ISO string
+  time: string;
   open: number;
   high: number;
   low: number;
   close: number;
-  volume?: number;
+  volume: number;
 }
 
 @Injectable({ providedIn: 'root' })
 export class MarketDataService {
   private http = inject(HttpClient);
-  private baseUrl = environment.apiBaseUrl;
+  private baseUrl = environment.apiBaseUrl; // http://localhost:4000/api/v1
 
-  /** Quote for a single symbol */
   getQuote(symbol: string) {
-    return this.http.get<Quote>(`${this.baseUrl}/market/quote`, {
-      params: { symbol },
-    });
+    return this.http.get<Quote>(`${this.baseUrl}/market/quote`, { params: { symbol } });
   }
 
-  /**
-   * Raw bars (backend/native shape)
-   * GET /market/bars?symbol=...&interval=15m&range=5d&timezone=America/New_York
-   */
-  getBars(
-    symbol: string,
-    interval: string,
-    range: string,
-    timezone?: string,
-  ): Observable<BarsResponse> {
+  getBars(symbol: string, interval: string, range: string, timezone?: string) {
     let params = new HttpParams()
       .set('symbol', symbol)
       .set('interval', interval)
       .set('range', range);
-
     if (timezone) params = params.set('timezone', timezone);
-
     return this.http.get<BarsResponse>(`${this.baseUrl}/market/bars`, { params });
   }
 
-  /**
-   * Convenience helper: same call, but mapped to UI-friendly field names
-   * Returns { time, open, high, low, close, volume }[]
-   */
-  getBarsForUi(
-    symbol: string,
-    interval: string,
-    range: string,
-    timezone?: string,
-  ): Observable<UiBar[]> {
+  /** Convenience for charts/logic */
+  getBarsForUi(symbol: string, interval: string, range: string, timezone?: string) {
     return this.getBars(symbol, interval, range, timezone).pipe(
-      map((res) =>
-        (res.points ?? []).map((p) => ({
-          time: p.t,
-          open: p.o,
-          high: p.h,
-          low: p.l,
-          close: p.c,
-          volume: p.v,
-        })),
-      ),
+      // map to simple UI bars
+      (source) =>
+        new Observable<UiBar[]>((subscriber) => {
+          const sub = source.subscribe({
+            next: (r) => {
+              const bars = r.points.map((p) => ({
+                time: p.t,
+                open: p.o,
+                high: p.h,
+                low: p.l,
+                close: p.c,
+                volume: p.v,
+              }));
+              subscriber.next(bars);
+              subscriber.complete();
+            },
+            error: (err) => subscriber.error(err),
+          });
+          return () => sub.unsubscribe();
+        }),
     );
   }
 }
+import { Observable } from 'rxjs';

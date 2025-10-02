@@ -1,1 +1,28 @@
-<p>backtests works!</p>
+<div class="p-6 max-w-3xl">
+    <h2 class="text-xl mb-4">Backtests (5/20 SMA)</h2>
+    <div *ngIf="loading()">Running…</div>
+
+    <table *ngIf="!loading() && rows().length" class="w-full border-collapse">
+        <thead>
+            <tr class="text-left border-b border-gray-700">
+                <th class="py-2 px-3">Symbol</th>
+                <th class="py-2 px-3">Trades</th>
+                <th class="py-2 px-3">Win rate</th>
+                <th class="py-2 px-3">Return</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr *ngFor="let r of rows()">
+                <td class="py-2 px-3">{{ r.symbol }}</td>
+                <td class="py-2 px-3">{{ r.trades | number:'1.0-0' }}</td>
+                <td class="py-2 px-3">{{ r.winRate | percent:'1.0-1' }}</td>
+                <td class="py-2 px-3">{{ r.pnlPct | percent:'1.0-2' }}</td>
+            </tr>
+        </tbody>
+
+    </table>
+
+    <div *ngIf="!loading() && !rows().length" class="opacity-70">
+        No results for this window.
+    </div>
+</div>

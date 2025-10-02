@@ -1,51 +1,45 @@
-<section class="space-y-4">
-    <header class="flex gap-3 items-end">
-        <div>
-            <label class="block text-xs opacity-70 mb-1">Search symbol</label>
-            <input [ngModel]="query()" (ngModelChange)="query.set($event)"
-                class="px-3 py-2 rounded bg-white/5 border border-white/10" placeholder="AAPL, NVDA..." />
+<div class="p-6 max-w-3xl">
+    <div class="flex gap-4 mb-4">
+        <div class="flex-1">
+            <label class="block text-sm mb-1">Search symbol</label>
+            <input type="text" class="w-full px-3 py-2 bg-gray-800 rounded" [ngModel]="query()"
+                (ngModelChange)="onQueryChange($event)" placeholder="AAPL" />
         </div>
-
-        <div>
-            <label class="block text-xs opacity-70 mb-1">Action</label>
-            <select [ngModel]="action()" (ngModelChange)="action.set($event)"
-                class="px-3 py-2 rounded bg-white/5 border border-white/10">
+        <div class="w-48">
+            <label class="block text-sm mb-1">Action</label>
+            <select class="w-full px-3 py-2 bg-gray-800 rounded" [ngModel]="action()"
+                (ngModelChange)="onActionChange($event)">
                 <option value="">All</option>
                 <option value="buy">Buy</option>
-                <option value="hold">Hold</option>
                 <option value="sell">Sell</option>
             </select>
         </div>
-        <div *ngIf="!loading() && filtered().length === 0" class="opacity-70 p-4">
-            No signals for the selected criteria.
-        </div>
+    </div>
 
-    </header>
+    <div *ngIf="loading()">Loading…</div>
 
-    <div *ngIf="loading(); else tableTpl" class="opacity-70">Loading…</div>
+    <table *ngIf="!loading() && filtered().length" class="w-full border-collapse">
+        <thead>
+            <tr class="text-left border-b border-gray-700">
+                <th class="py-2 px-3">Symbol</th>
+                <th class="py-2 px-3">Action</th>
+                <th class="py-2 px-3">Price</th>
+                <th class="py-2 px-3">When</th>
+                <th class="py-2 px-3">Reason</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr *ngFor="let s of filtered()">
+                <td class="py-2 px-3">{{ s.symbol }}</td>
+                <td class="py-2 px-3 capitalize">{{ s.action }}</td>
+                <td class="py-2 px-3">{{ s.price | number:'1.2-2' }}</td>
+                <td class="py-2 px-3">{{ s.timestamp | date:'yyyy-MM-dd HH:mm' }}</td>
+                <td class="py-2 px-3 opacity-80">{{ s.reason || '—' }}</td>
+            </tr>
+        </tbody>
+    </table>
 
-    <ng-template #tableTpl>
-        <div class="overflow-x-auto rounded-lg border border-white/10">
-            <table class="min-w-full text-sm">
-                <thead class="bg-white/5">
-                    <tr>
-                        <th class="text-left px-4 py-2">Symbol</th>
-                        <th class="text-left px-4 py-2">Action</th>
-                        <th class="text-left px-4 py-2">Confidence</th>
-                        <th class="text-left px-4 py-2">When</th>
-                        <th class="text-left px-4 py-2">Reason</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr *ngFor="let s of filtered()" class="border-t border-white/10">
-                        <td class="px-4 py-2 font-medium">{{ s.symbol }}</td>
-                        <td class="px-4 py-2 capitalize">{{ s.action }}</td>
-                        <td class="px-4 py-2">{{ (s.confidence * 100) | number:'1.0-0' }}%</td>
-                        <td class="px-4 py-2">{{ s.timestamp | date:'yyyy-MM-dd HH:mm' }}</td>
-                        <td class="px-4 py-2 opacity-80">{{ s.reason || '—' }}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </ng-template>
-</section>
+    <div *ngIf="!loading() && !filtered().length" class="opacity-70">
+        No signals for your filters in this time window.
+    </div>
+</div>
