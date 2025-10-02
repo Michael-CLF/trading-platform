@@ -5,18 +5,34 @@
         <div class="opacity-70 text-sm">Loading…</div>
     </ng-container>
 
+    <button (click)="loadWatchlist()" [disabled]="loading()">Refresh</button>
+
+    <div *ngIf="loading()" class="opacity-70 mt-2">Loading quotes…</div>
+    <div *ngIf="error()" class="text-red-400 mt-2">{{ error() }}</div>
+
+    <ul *ngIf="!loading() && !error() && quotes().length">
+        <li *ngFor="let q of quotes()">
+            {{ q.symbol }} — {{ q.price | number:'1.2-2' }}
+        </li>
+    </ul>
+
+    <div *ngIf="!loading() && !error() && !quotes().length" class="opacity-70">
+        No quotes returned.
+    </div>
+
+
     <ng-template #contentTpl>
         <ng-container *ngIf="!error(); else errorTpl">
-            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="grid gap-6 sm:grid-cols-3 lg:grid-cols-3">
                 <div class="rounded-lg border border-white/10 p-4" *ngFor="let q of quotes()">
                     <div class="flex items-center justify-between">
-                        <div class="text-sm opacity-70">{{ q.symbol }}</div>
-                        <div class="text-xs px-2 py-0.5 rounded" [ngClass]="{
-   'bg-green-500/20': (q?.change ?? 0) >= 0,
-    'bg-red-500/20' : (q?.change ?? 0) < 0
-  }">
-                            {{ q.changePct | number:'1.2-2' }}%
+                        <!-- inside your *ngFor card header -->
+                        <div class="text-xs px-2 py-0.5 rounded"
+                            [ngStyle]="(q?.change ?? 0) >= 0
+              ? { 'background-color': '#00c85322', color: '#ffffff' } : { 'background-color': '#c00000', color: '#ffffff' }">
+                            %
                         </div>
+
 
                     </div>
 

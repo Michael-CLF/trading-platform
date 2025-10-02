@@ -22,7 +22,40 @@ export class BacktestsComponent {
   private market = inject(MarketDataService);
   loading = signal(true);
   rows = signal<BacktestResult[]>([]);
-  private readonly symbols = ['AAPL', 'MSFT', 'NVDA'];
+  private readonly symbols = [
+    'SPY',
+    'QQQ',
+    'IWM',
+    'AAPL',
+    'MSFT',
+    'NVDA',
+    'AMZN',
+    'GOOGL',
+    'META',
+    'TSLA',
+    'AVGO',
+    'AMD',
+    // Momentum / high-vol
+    'SMCI',
+    'COIN',
+    'MARA',
+    'RIOT',
+    'PLTR',
+    'CRWD',
+    'PANW',
+    'SNOW',
+    'NET',
+    'SHOP',
+    'TTD',
+    'UBER',
+    // Sector ETFs
+    'XLE',
+    'XLF',
+    'XLV',
+    'XLK',
+    'XLC',
+    'XLY',
+  ];
 
   async ngOnInit() {
     this.loading.set(true);
