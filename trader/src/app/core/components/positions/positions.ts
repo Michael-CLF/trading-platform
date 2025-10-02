@@ -1,7 +1,8 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule, CurrencyPipe, DecimalPipe, PercentPipe } from '@angular/common';
 import { forkJoin } from 'rxjs';
-import { MarketDataService, Quote } from '../../services/market-data.service';
+import { MarketDataService } from '../../services/market-data.service';
+import { Quote } from '../../shared/models/quote.model';
 
 export interface Position {
   symbol: string;

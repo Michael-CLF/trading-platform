@@ -1,54 +1,61 @@
-<section class="space-y-4">
-    <h1 class="text-xl font-semibold">Dashboard</h1>
+<!-- src/app/core/components/dashboard/dashboard.html -->
 
-    <ng-container *ngIf="loading(); else contentTpl">
-        <div class="opacity-70 text-sm">Loading…</div>
-    </ng-container>
+<h2 class="text-2xl font-semibold mb-4">Dashboard</h2>
 
-    <button (click)="loadWatchlist()" [disabled]="loading()">Refresh</button>
+<!-- 6 columns on large screens -->
+<div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+    <div *ngFor="let q of rows()" class="rounded-lg border border-white/10 bg-white/5 p-4">
+        <div class="flex items-center justify-between">
+            <div class="text-sm opacity-70 font-medium">{{ q.symbol }}</div>
+            <div class="text-xs px-2 py-0.5 rounded font-medium" [style.background-color]="badgeBgClass(q)"
+                [style.color]="badgeClass(q)">
+                {{ signedPct(q) }}
+            </div>
+        </div>
 
-    <div *ngIf="loading()" class="opacity-70 mt-2">Loading quotes…</div>
-    <div *ngIf="error()" class="text-red-400 mt-2">{{ error() }}</div>
 
-    <ul *ngIf="!loading() && !error() && quotes().length">
-        <li *ngFor="let q of quotes()">
-            {{ q.symbol }} — {{ q.price | number:'1.2-2' }}
-        </li>
-    </ul>
+        <div class="mt-2 text-2xl font-semibold">
+            {{ q.price | number:'1.2-2' }}
+            <small class="ml-1 text-sm" [style.color]="deltaClass(q)">
+                ({{ signedDelta(q) }})
+            </small>
+        </div>
 
-    <div *ngIf="!loading() && !error() && !quotes().length" class="opacity-70">
-        No quotes returned.
+        <div class="mt-1 text-xs opacity-60">
+            {{ q.asOf | date:'yyyy-MM-dd HH:mm' }}
+        </div>
+    </div>
+</div>
+
+<!-- Summary: Top gainers / losers -->
+<div class="mt-8 grid gap-6 md:grid-cols-2">
+    <div>
+        <h3 class="mb-2 text-sm uppercase tracking-wide opacity-70">Top gainers (by %)</h3>
+        <ul class="space-y-1">
+            <li *ngFor="let g of gainers()" class="flex items-baseline gap-2">
+                <span class="font-mono w-14">{{ g.symbol }}</span>
+                <span [style.color]="'var(--color-positive)'" class="font-medium">
+                    +{{ g.pct | number:'1.1-2' }}%
+                </span>
+                <span class="opacity-60">
+                    ( {{ g.delta >= 0 ? '+' : '' }}{{ g.delta | number:'1.2-2' }} )
+                </span>
+            </li>
+        </ul>
     </div>
 
-
-    <ng-template #contentTpl>
-        <ng-container *ngIf="!error(); else errorTpl">
-            <div class="grid gap-6 sm:grid-cols-3 lg:grid-cols-3">
-                <div class="rounded-lg border border-white/10 p-4" *ngFor="let q of quotes()">
-                    <div class="flex items-center justify-between">
-                        <!-- inside your *ngFor card header -->
-                        <div class="text-xs px-2 py-0.5 rounded"
-                            [ngStyle]="(q?.change ?? 0) >= 0
-              ? { 'background-color': '#00c85322', color: '#ffffff' } : { 'background-color': '#c00000', color: '#ffffff' }">
-                            %
-                        </div>
-
-
-                    </div>
-
-                    <div class="mt-1 text-2xl font-semibold">
-                        {{ q.price | number:'1.2-2' }}
-                    </div>
-
-                    <div class="mt-1 text-xs opacity-60">
-                        {{ q.asOf | date:'yyyy-MM-dd HH:mm' }}
-                    </div>
-                </div>
-            </div>
-        </ng-container>
-    </ng-template>
-
-    <ng-template #errorTpl>
-        <div class="text-red-400 text-sm">{{ error() }}</div>
-    </ng-template>
-</section>
+    <div>
+        <h3 class="mb-2 text-sm uppercase tracking-wide opacity-70">Top losers (by %)</h3>
+        <ul class="space-y-1">
+            <li *ngFor="let l of losers()" class="flex items-baseline gap-2">
+                <span class="font-mono w-14">{{ l.symbol }}</span>
+                <span [style.color]="'var(--color-negative-bg)'" class="font-medium">
+                    {{ l.pct | number:'1.1-2' }}%
+                </span>
+                <span class="opacity-60">
+                    ( {{ l.delta >= 0 ? '+' : '' }}{{ l.delta | number:'1.2-2' }} )
+                </span>
+            </li>
+        </ul>
+    </div>
+</div>
