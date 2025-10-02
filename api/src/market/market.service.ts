@@ -1,154 +1,156 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable, Inject, HttpException } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import * as qs from 'querystring';
+
+type BarsInterval = '1m' | '5m' | '15m' | '30m' | '1h' | '1d';
+type BarsRange = '1d' | '5d' | '1mo' | '3mo' | '6mo' | '1y';
 
 @Injectable()
 export class MarketService {
+  private readonly polygonKey: string;
+  private readonly polygonBase: string;
+
   constructor(
     private readonly http: HttpService,
     private readonly config: ConfigService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
-  ) {}
+  ) {
+    this.polygonKey = this.config.get<string>('POLYGON_API_KEY') ?? '';
+    this.polygonBase =
+      this.config.get<string>('POLYGON_BASE_URL') ?? 'https://api.polygon.io';
+  }
 
-  // ==== Public API (unchanged) =================================================
+  /* ----------------------------- Public API ----------------------------- */
 
   async getQuote(symbol: string) {
-    const key = `quote:${symbol}`;
-    const ttl = this.config.get<number>('cache.quoteTtl') ?? 15; // seconds
-    const cached = await this.cache.get(key);
-    if (cached) return cached;
+    const cacheKey = `quote:${symbol}`;
+    const ttl = this.config.get<number>('CACHE_TTL_QUOTE') ?? 15;
 
-    const data = await this.fetchProviderQuote(symbol);
-    await this.cache.set(key, data, ttl);
+    const hit = await this.cache.get(cacheKey);
+    if (hit) return hit;
+
+    const data = await this.fetchQuotePolygon(symbol);
+    await this.cache.set(cacheKey, data, ttl);
     return data;
   }
 
   async getBars(
     symbol: string,
-    interval: string,
-    range: string,
+    interval: BarsInterval,
+    range: BarsRange,
     timezone?: string,
   ) {
-    const key = `bars:${symbol}:${interval}:${range}:${timezone ?? 'local'}`;
-    const ttl = this.config.get<number>('cache.intradayTtl') ?? 60; // seconds
-    const cached = await this.cache.get(key);
-    if (cached) return cached;
+    const cacheKey = `bars:${symbol}:${interval}:${range}:${timezone ?? 'local'}`;
+    const ttl = this.config.get<number>('CACHE_TTL_INTRADAY') ?? 60;
 
-    const data = await this.fetchProviderBars(
-      symbol,
-      interval,
-      range,
-      timezone,
-    );
-    await this.cache.set(key, data, ttl);
+    const hit = await this.cache.get(cacheKey);
+    if (hit) return hit;
+
+    const data = await this.fetchBarsPolygon(symbol, interval, range, timezone);
+    await this.cache.set(cacheKey, data, ttl);
     return data;
   }
 
-  // ==== Provider adapter: Polygon.io ===========================================
+  /* ---------------------------- Polygon fetch --------------------------- */
 
-  private get polygonKey(): string {
-    const k = this.config.get<string>('POLYGON_API_KEY');
-    if (!k) throw new Error('POLYGON_API_KEY not set');
-    return k;
-  }
-  // in market.service.ts
-  private async safeGet<T = any>(url: string) {
+  private async fetchQuotePolygon(symbol: string) {
+    // Use snapshot endpoint for real-time data during market hours
+    const snapshotUrl =
+      `${this.polygonBase}/v2/snapshot/locale/us/markets/stocks/tickers/${symbol}?` +
+      qs.stringify({ apiKey: this.polygonKey });
+
     try {
-      const res = await firstValueFrom(this.http.get<T>(url));
-      return res.data as any;
-    } catch (e: any) {
-      console.error('[Polygon GET failed]', {
-        url,
-        status: e?.response?.status,
-        data: e?.response?.data,
-      });
-      throw e;
-    }
-  }
+      // Try real-time snapshot first
+      const snapshot = await this.safeGet<any>(snapshotUrl);
 
-  private get polygonBase(): string {
-    return (
-      this.config.get<string>('MARKET_BASE_URL') || 'https://api.polygon.io'
-    );
-  }
+      if (snapshot?.ticker) {
+        const ticker = snapshot.ticker;
+        // Use current day data if available, otherwise fall back to previous close
+        const price = ticker.day?.c || ticker.prevDay?.c || null;
+        const timestamp = ticker.updated || Date.now();
 
-  /** Quote = latest 15m bar close (or previous close if market is closed) */
-  private async fetchProviderQuote(symbol: string) {
-    const base = this.polygonBase;
-    const key = this.polygonKey;
+        const out = {
+          symbol,
+          price,
+          currency: 'USD',
+          asOf: new Date(timestamp / 1000000).toISOString(), // Polygon uses nanoseconds
+          provider: 'polygon',
+          change: ticker.todaysChange || 0,
+          changePercent: ticker.todaysChangePerc || 0,
+          dayOpen: ticker.day?.o || null,
+          dayHigh: ticker.day?.h || null,
+          dayLow: ticker.day?.l || null,
+          dayVolume: ticker.day?.v || null,
+          prevClose: ticker.prevDay?.c || null,
+        };
 
-    // 1) Previous close
-    const prevUrl = `${base}/v2/aggs/ticker/${encodeURIComponent(
-      symbol,
-    )}/prev?adjusted=true&apiKey=${key}`;
-    const prevRes = await firstValueFrom(this.http.get(prevUrl));
-    const prev = prevRes.data?.results?.[0];
-    const previousClose: number | undefined = prev?.c;
-
-    // 2) Latest 15m bar today (proxy for "current price")
-    const today = new Date();
-    const dateStr = isoDateOnly(today); // YYYY-MM-DD
-    const lastBarUrl =
-      `${base}/v2/aggs/ticker/${encodeURIComponent(symbol)}` +
-      `/range/15/minute/${dateStr}/${dateStr}?adjusted=true&sort=desc&limit=1&apiKey=${key}`;
-
-    const barRes = await firstValueFrom(this.http.get(lastBarUrl));
-    const lastBar = barRes.data?.results?.[0];
-
-    const price: number | undefined = lastBar?.c ?? previousClose ?? undefined;
-    const asOfTs: number | undefined = lastBar?.t ?? prev?.t;
-    const asOf = asOfTs
-      ? new Date(asOfTs).toISOString()
-      : new Date().toISOString();
-
-    let change: number | undefined;
-    let changePct: number | undefined;
-    if (price != null && previousClose != null && previousClose !== 0) {
-      change = price - previousClose;
-      changePct = (change / previousClose) * 100;
+        console.log(`[quote] ${symbol} -> ${price} (real-time via snapshot)`);
+        return out;
+      }
+    } catch (error) {
+      console.warn(
+        `Snapshot failed for ${symbol}, falling back to previous day:`,
+        error,
+      );
     }
 
-    return {
+    // Fallback to previous day if snapshot fails
+    const prevUrl =
+      `${this.polygonBase}/v2/aggs/ticker/${symbol}/prev?` +
+      qs.stringify({ adjusted: 'true', apiKey: this.polygonKey });
+
+    const r = await this.safeGet<any>(prevUrl);
+    const row = r?.results?.[0] ?? null;
+
+    const price = row ? row.c : null;
+    const ts = row ? row.t : Date.now();
+
+    const out = {
       symbol,
-      price: price ?? 0,
-      previousClose,
-      change,
-      changePct,
-      asOf,
-      provider: this.config.get('vendor.provider') ?? 'polygon',
+      price,
       currency: 'USD',
+      asOf: new Date(ts).toISOString(),
+      provider: 'polygon',
+      change: 0,
+      changePercent: 0,
+      dayOpen: row?.o || null,
+      dayHigh: row?.h || null,
+      dayLow: row?.l || null,
+      dayVolume: row?.v || null,
+      prevClose: null,
     };
+
+    console.log(`[quote] ${symbol} -> ${price} (previous day fallback)`);
+    return out;
   }
 
-  /** Bars for the given interval & range, mapped to { t,o,h,l,c,v } points */
-  private async fetchProviderBars(
+  private async fetchBarsPolygon(
     symbol: string,
-    interval: string, // "15m" | "5m" | "1h" | "1d" ...
-    range: string, // "5d" | "1mo" | "3mo" | "6mo" | "1y" | "ytd" | "max"
-    timezone?: string,
+    interval: BarsInterval,
+    range: BarsRange,
+    tz?: string,
   ) {
-    const base = this.polygonBase;
-    const key = this.polygonKey;
-
-    // Parse interval into Polygon (multiplier + timespan)
-    const { multiplier, timespan } = parseInterval(interval);
-
-    // Compute date window from "range"
-    const { from, to } = computeFromTo(range);
+    const { mult, span } = toPolygonSpan(interval);
+    const { fromISO, toISO } = toDateWindow(range);
 
     const url =
-      `${base}/v2/aggs/ticker/${encodeURIComponent(symbol)}` +
-      `/range/${multiplier}/${timespan}/${from}/${to}` +
-      `?adjusted=true&sort=asc&limit=50000&apiKey=${key}`;
+      `${this.polygonBase}/v2/aggs/ticker/${symbol}/range/${mult}/${span}/${fromISO}/${toISO}?` +
+      qs.stringify({
+        adjusted: 'true',
+        sort: 'asc',
+        limit: 50000,
+        apiKey: this.polygonKey,
+      });
 
-    const resp = await firstValueFrom(this.http.get(url));
-    const results: Array<any> = resp.data?.results ?? [];
+    const agg = await this.safeGet<any>(url);
+    const results = Array.isArray(agg?.results) ? agg.results : [];
 
-    const points = results.map((r) => ({
-      t: new Date(r.t).toISOString(), // Polygon returns epoch ms
+    const points = results.map((r: any) => ({
+      t: new Date(r.t).toISOString(),
       o: r.o,
       h: r.h,
       l: r.l,
@@ -156,87 +158,73 @@ export class MarketService {
       v: r.v,
     }));
 
+    console.log(
+      `[bars] ${symbol} ${interval} ${range} -> ${points.length} points via polygon`,
+    );
     return {
       symbol,
       interval,
       range,
-      timezone: timezone ?? 'America/New_York',
-      provider: this.config.get('vendor.provider') ?? 'polygon',
+      timezone: tz ?? 'America/New_York',
+      provider: 'polygon',
       points,
     };
   }
+
+  /* ------------------------------- Helpers ------------------------------ */
+
+  private async safeGet<T = any>(url: string): Promise<T> {
+    try {
+      const res = await firstValueFrom(this.http.get<T>(url));
+      return res.data as T;
+    } catch (e: any) {
+      const status = e?.response?.status ?? 500;
+      const data = e?.response?.data ?? { message: 'Provider error' };
+      console.error('[HTTP GET failed]', { url, status, data });
+      throw new HttpException(data, status);
+    }
+  }
 }
 
-/* ------------------------------ Helpers ----------------------------------- */
-
-function isoDateOnly(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-/**
- * Convert UI interval strings into Polygon's (multiplier, timespan)
- * Examples:
- *  "15m" -> { 15, "minute" }
- *  "5m"  -> { 5,  "minute" }
- *  "1h"  -> { 1,  "hour" }
- *  "1d"  -> { 1,  "day" }
- */
-function parseInterval(interval: string): {
-  multiplier: number;
-  timespan: 'minute' | 'hour' | 'day';
+/* Map UI interval to Polygon multiplier/span */
+function toPolygonSpan(i: BarsInterval): {
+  mult: number;
+  span: 'minute' | 'hour' | 'day';
 } {
-  const m = interval.match(/^(\d+)([mhd])$/i);
-  if (!m) return { multiplier: 15, timespan: 'minute' }; // default
-  const mult = Number(m[1]);
-  const unit = m[2].toLowerCase();
-  if (unit === 'm') return { multiplier: mult, timespan: 'minute' };
-  if (unit === 'h') return { multiplier: mult, timespan: 'hour' };
-  return { multiplier: mult, timespan: 'day' };
+  if (i === '1d') return { mult: 1, span: 'day' };
+  if (i === '1h') return { mult: 1, span: 'hour' };
+  if (i.endsWith('m')) return { mult: parseInt(i, 10), span: 'minute' };
+  throw new Error(`Unsupported interval: ${i}`);
 }
 
-/**
- * Compute from/to dates for Polygon from simple ranges.
- * Supports: "5d", "1mo", "3mo", "6mo", "1y", "ytd", "max"
- * Default: last 5 days.
- */
-function computeFromTo(range: string): { from: string; to: string } {
-  const toDate = new Date();
-  const to = isoDateOnly(toDate);
+/* Build a date window for Polygon (YYYY-MM-DD ranges) */
+function toDateWindow(r: BarsRange): { fromISO: string; toISO: string } {
+  const end = new Date();
+  const start = new Date(end);
 
-  const fromDate = new Date(toDate);
-  const lower = (range || '').toLowerCase();
-
-  switch (lower) {
+  switch (r) {
+    case '1d':
+      start.setDate(end.getDate() - 1);
+      break;
     case '5d':
-      fromDate.setDate(fromDate.getDate() - 7); // 5d + buffer
+      start.setDate(end.getDate() - 5);
       break;
     case '1mo':
-      fromDate.setMonth(fromDate.getMonth() - 1);
+      start.setMonth(end.getMonth() - 1);
       break;
     case '3mo':
-      fromDate.setMonth(fromDate.getMonth() - 3);
+      start.setMonth(end.getMonth() - 3);
       break;
     case '6mo':
-      fromDate.setMonth(fromDate.getMonth() - 6);
+      start.setMonth(end.getMonth() - 6);
       break;
     case '1y':
-      fromDate.setFullYear(fromDate.getFullYear() - 1);
-      break;
-    case 'ytd':
-      fromDate.setMonth(0, 1);
-      fromDate.setHours(0, 0, 0, 0);
-      break;
-    case 'max':
-      fromDate.setFullYear(fromDate.getFullYear() - 20); // a big window
+      start.setFullYear(end.getFullYear() - 1);
       break;
     default:
-      fromDate.setDate(fromDate.getDate() - 7); // sensible default
-      break;
+      throw new Error(`Unsupported range: ${r}`);
   }
 
-  const from = isoDateOnly(fromDate);
-  return { from, to };
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  return { fromISO: fmt(start), toISO: fmt(end) };
 }

@@ -1,23 +1,22 @@
+// trader/src/app/core/services/market-data.service.ts
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams, HttpErrorResponse } from '@angular/common/http';
-import { Observable, throwError, timer } from 'rxjs';
-import { catchError, retry, map, shareReplay, timeout } from 'rxjs/operators';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
+import { Observable, forkJoin, of, throwError, timer } from 'rxjs';
+import { catchError, map, retry, shareReplay, timeout } from 'rxjs/operators';
 import { environment } from '../../../environments/environment.development';
+import { Quote } from '../shared/models/quote.model';
 
-/**
- * Quote response from the market API
- */
-export interface Quote {
-  symbol: string;
-  price: number | null;
-  currency: 'USD';
-  asOf: string; // ISO timestamp
-  provider: 'polygon';
+/** Shape used by chart components after transformation */
+export interface UiBar {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
 }
 
-/**
- * Bars response from the market API
- */
+/** Raw bars payload coming from the backend */
 export interface BarsResponse {
   symbol: string;
   interval: string;
@@ -34,21 +33,7 @@ export interface BarsResponse {
   }>;
 }
 
-/**
- * Simplified bar format for UI components
- */
-export interface UiBar {
-  time: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
-/**
- * Error details for market data failures
- */
+/** Error envelope we throw downstream */
 export interface MarketDataError {
   symbol?: string;
   message: string;
@@ -56,69 +41,122 @@ export interface MarketDataError {
   timestamp: string;
 }
 
-/**
- * Market Data Service
- * Handles all stock market data operations with proper error handling,
- * caching, and retry logic for resilience
- */
 @Injectable({ providedIn: 'root' })
 export class MarketDataService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = environment.apiBaseUrl; // http://localhost:4000/api/v1
+  private readonly baseUrl = environment.apiBaseUrl; // e.g. http://localhost:4000/api/v1
 
-  // Cache for active quotes to prevent duplicate requests
-  private quoteCache = new Map<string, Observable<Quote>>();
-  private readonly CACHE_DURATION_MS = 5000; // 5 seconds cache for quotes
+  /** Short-lived cache to prevent duplicate quote calls while a request is in flight */
+  private readonly quoteCache = new Map<string, Observable<Quote>>();
+  private readonly CACHE_DURATION_MS = 5_000;
+
+  // ------------------------ Quotes ------------------------
 
   /**
-   * Get real-time quote for a stock symbol
-   * Includes caching to prevent excessive API calls
+   * Get a single quote (via your backend).
+   * - Debounced by a tiny in-memory cache
+   * - Normalizes to the provider-agnostic Quote model
    */
   getQuote(symbol: string): Observable<Quote> {
-    // Normalize symbol to uppercase
-    const normalizedSymbol = symbol.toUpperCase();
-
-    // Check cache first
-    const cached = this.quoteCache.get(normalizedSymbol);
-    if (cached) {
-      return cached;
+    const normalized = symbol.trim().toUpperCase();
+    if (!normalized) {
+      return throwError(
+        () =>
+          <MarketDataError>{
+            symbol,
+            message: 'Symbol required',
+            statusCode: 400,
+            timestamp: new Date().toISOString(),
+          },
+      );
     }
 
-    // Create new request with caching
-    const quote$ = this.http
-      .get<Quote>(`${this.baseUrl}/market/quote`, {
-        params: { symbol: normalizedSymbol },
-      })
-      .pipe(
-        timeout(10000), // 10 second timeout
-        retry({
-          count: 2,
-          delay: (error, retryCount) => {
-            console.log(`Retry attempt ${retryCount} for quote ${normalizedSymbol}`);
-            return timer(1000 * retryCount); // Progressive delay
-          },
-        }),
-        catchError((error) => this.handleError(error, normalizedSymbol)),
-        shareReplay({ bufferSize: 1, refCount: true }),
-      );
+    const cached = this.quoteCache.get(normalized);
+    if (cached) return cached;
 
-    // Store in cache
-    this.quoteCache.set(normalizedSymbol, quote$);
+    const params = new HttpParams().set('symbol', normalized);
 
-    // Clear cache after duration
-    setTimeout(() => {
-      this.quoteCache.delete(normalizedSymbol);
-    }, this.CACHE_DURATION_MS);
+    const quote$ = this.http.get<unknown>(`${this.baseUrl}/market/quote`, { params }).pipe(
+      timeout(8_000),
+      retry({ count: 1, delay: (_e, i) => timer(250 * i) }),
+      map((raw) => this.normalizeQuote(normalized, raw)),
+      // Cache the latest value for any late subscribers while request is active
+      shareReplay({ bufferSize: 1, refCount: true }),
+      catchError((err) => this.handleError(err, normalized)),
+    );
+
+    this.quoteCache.set(normalized, quote$);
+    // Clear the cache entry after a small window
+    setTimeout(() => this.quoteCache.delete(normalized), this.CACHE_DURATION_MS);
 
     return quote$;
   }
 
   /**
-   * Get historical price bars for a stock symbol
-   * @param symbol Stock ticker symbol
-   * @param interval Time interval (1m, 5m, 15m, 30m, 1h, 1d)
-   * @param range Date range (1d, 5d, 1mo, 3mo, 6mo, 1y)
-   * @param timezone Optional timezone (defaults to America/New_York)
+   * Normalize backend (or Polygon-like) responses to our Quote model.
+   * Accepts either:
+   *  - already-normalized backend shape { price, change, changePct, previousClose, asOf }
+   *  - or Polygon-ish fields { c, d, dp, pc, t }
+   */
+  private normalizeQuote(symbol: string, raw: any): Quote {
+    // If backend already normalized, trust it
+    if (raw && typeof raw.price === 'number') {
+      return {
+        symbol,
+        price: raw.price,
+        change: typeof raw.change === 'number' ? raw.change : undefined,
+        changePct: typeof raw.changePct === 'number' ? raw.changePct : undefined,
+        previousClose: typeof raw.previousClose === 'number' ? raw.previousClose : undefined,
+        asOf:
+          typeof raw.asOf === 'string'
+            ? raw.asOf
+            : new Date(typeof raw.t === 'number' ? raw.t : Date.now()).toISOString(),
+        provider: typeof raw.provider === 'string' ? raw.provider : 'polygon',
+      };
+    }
+
+    // Fallback: try to interpret Polygon fields
+    const price = Number(raw?.c ?? NaN);
+    if (!Number.isFinite(price)) {
+      throw <MarketDataError>{
+        symbol,
+        message: 'Quote payload missing price',
+        statusCode: 502,
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    return {
+      symbol,
+      price,
+      change: Number.isFinite(Number(raw?.d)) ? Number(raw.d) : undefined,
+      changePct: Number.isFinite(Number(raw?.dp)) ? Number(raw.dp) : undefined,
+      previousClose: Number.isFinite(Number(raw?.pc)) ? Number(raw.pc) : undefined,
+      asOf: new Date(typeof raw?.t === 'number' ? raw.t : Date.now()).toISOString(),
+      provider: 'polygon',
+    };
+  }
+
+  /** Fetch several quotes in parallel; failures are tolerated and filtered out by default */
+  getMultipleQuotes(symbols: string[]): Observable<Quote[]> {
+    if (!symbols?.length) return of([]);
+    const calls = symbols.map((s) =>
+      this.getQuote(s).pipe(
+        catchError(() => of(null)), // tolerate per-symbol failures
+      ),
+    );
+    return forkJoin(calls).pipe(map((list) => list.filter((q): q is Quote => !!q)));
+  }
+
+  /** Clear the in-memory quote cache */
+  clearCache(): void {
+    this.quoteCache.clear();
+  }
+
+  // ------------------------ Bars ------------------------
+
+  /**
+   * Get raw bars from backend
    */
   getBars(
     symbol: string,
@@ -126,32 +164,22 @@ export class MarketDataService {
     range: string,
     timezone?: string,
   ): Observable<BarsResponse> {
-    // Build query parameters
     let params = new HttpParams()
-      .set('symbol', symbol.toUpperCase())
+      .set('symbol', symbol.trim().toUpperCase())
       .set('interval', interval)
       .set('range', range);
 
-    if (timezone) {
-      params = params.set('timezone', timezone);
-    }
+    if (timezone) params = params.set('timezone', timezone);
 
     return this.http.get<BarsResponse>(`${this.baseUrl}/market/bars`, { params }).pipe(
-      timeout(15000), // 15 second timeout for bars (larger data)
-      retry({
-        count: 2,
-        delay: (error, retryCount) => {
-          console.log(`Retry attempt ${retryCount} for bars ${symbol}`);
-          return timer(1500 * retryCount);
-        },
-      }),
-      catchError((error) => this.handleError(error, symbol)),
+      timeout(15_000),
+      retry({ count: 2, delay: (_e, i) => timer(1_000 * i) }),
+      catchError((err) => this.handleError(err, symbol)),
     );
   }
 
   /**
-   * Get bars formatted for UI components (charts)
-   * Transforms the API response to a simpler format
+   * Bars formatted for charts
    */
   getBarsForUi(
     symbol: string,
@@ -160,112 +188,41 @@ export class MarketDataService {
     timezone?: string,
   ): Observable<UiBar[]> {
     return this.getBars(symbol, interval, range, timezone).pipe(
-      map((response) =>
-        response.points.map((point) => ({
-          time: point.t,
-          open: point.o,
-          high: point.h,
-          low: point.l,
-          close: point.c,
-          volume: point.v,
+      map((res) =>
+        res.points.map((p) => ({
+          time: p.t,
+          open: p.o,
+          high: p.h,
+          low: p.l,
+          close: p.c,
+          volume: p.v,
         })),
       ),
-      catchError((error) => {
-        console.error('Failed to fetch UI bars:', error);
-        return throwError(() => error);
-      }),
     );
   }
 
-  /**
-   * Get multiple quotes in parallel
-   * Useful for dashboard views showing multiple stocks
-   */
-  getMultipleQuotes(symbols: string[]): Observable<Quote[]> {
-    const requests = symbols.map((symbol) =>
-      this.getQuote(symbol).pipe(
-        catchError((error) => {
-          console.error(`Failed to fetch quote for ${symbol}:`, error);
-          // Return a null quote on error to not break the entire batch
-          return [
-            {
-              symbol,
-              price: null,
-              currency: 'USD' as const,
-              asOf: new Date().toISOString(),
-              provider: 'polygon' as const,
-            },
-          ];
-        }),
-      ),
-    );
+  // ------------------------ Errors ------------------------
 
-    return new Observable((subscriber) => {
-      const quotes: Quote[] = [];
-      let completed = 0;
-
-      requests.forEach((request, index) => {
-        request.subscribe({
-          next: (quote) => {
-            quotes[index] = quote;
-            completed++;
-            if (completed === requests.length) {
-              subscriber.next(quotes);
-              subscriber.complete();
-            }
-          },
-          error: (error) => {
-            // Individual errors are already handled
-            completed++;
-            if (completed === requests.length) {
-              subscriber.next(quotes);
-              subscriber.complete();
-            }
-          },
-        });
-      });
-    });
-  }
-
-  /**
-   * Clear the quote cache
-   * Useful when you need fresh data immediately
-   */
-  clearCache(): void {
-    this.quoteCache.clear();
-  }
-
-  /**
-   * Centralized error handling
-   */
   private handleError(error: HttpErrorResponse, symbol?: string): Observable<never> {
-    let errorMessage = 'An unknown error occurred';
+    const message =
+      (error?.error as any)?.message ?? error?.message ?? `HTTP ${error?.status ?? 0}`;
 
-    if (error.error instanceof ErrorEvent) {
-      // Client-side error
-      errorMessage = `Client error: ${error.error.message}`;
-    } else {
-      // Server-side error
-      errorMessage = error.error?.message || error.message || `Server error: ${error.status}`;
-
-      // Log the full error for debugging
-      console.error('Market data error:', {
-        symbol,
-        status: error.status,
-        statusText: error.statusText,
-        message: errorMessage,
-        url: error.url,
-        error: error.error,
-      });
-    }
-
-    const marketError: MarketDataError = {
+    console.error('Market data error', {
       symbol,
-      message: errorMessage,
-      statusCode: error.status || 0,
+      status: error?.status,
+      statusText: error?.statusText,
+      message,
+      url: error?.url,
+      raw: error?.error,
+    });
+
+    const out: MarketDataError = {
+      symbol,
+      message,
+      statusCode: error?.status ?? 0,
       timestamp: new Date().toISOString(),
     };
 
-    return throwError(() => marketError);
+    return throwError(() => out);
   }
 }
