@@ -1,3 +1,4 @@
+// src/app/core/components/backtests/backtests.ts
 import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -6,7 +7,7 @@ import { firstValueFrom } from 'rxjs';
 import { MarketDataService } from '../../services/market-data.service';
 import { Bar15m } from '../../shared/models/bar.model';
 import { LabeledBar15m } from '../../shared/models/label.model';
-import { FeatureVector, BuiltFeatureRow } from '../../shared/models/feature-vector.model';
+import { FeatureVector } from '../../shared/models/feature-vector.model';
 import { BacktestSummary } from '../../shared/models/backtest.models';
 import { Metrics } from '../../shared/models/metrics.model';
 
@@ -22,7 +23,6 @@ import {
 import { BacktestsSettingsService } from '../../services/backtests-settings.service';
 import { PredictorService } from '../../services/predictor.service';
 
-// --- Sorting keys (MUST be outside the class) ---
 type SortKey =
   | 'symbol'
   | 'trades'
@@ -50,13 +50,20 @@ export class BacktestsComponent {
   rows = signal<BacktestSummary[]>([]);
   trackBySymbol = (_: number, r: { symbol: string }) => r.symbol;
 
+  // UI knobs
   entryBps = 5;
   exitBps = 3;
   longTh = 0.62;
 
+  // Sweep chart config
   chartW = 720;
   chartH = 260;
   chartPad = 36;
+
+  private _sweepRows = signal<
+    Array<{ th: number; trades: number; winRate: number; pnlPct: number }>
+  >([]);
+  sweepRows = this._sweepRows.asReadonly();
 
   private defaultSymbols = [
     'SPY',
@@ -95,14 +102,43 @@ export class BacktestsComponent {
   private _metricsBySymbol = signal<Record<string, Metrics>>({});
   metricsBySymbol = this._metricsBySymbol.asReadonly();
 
-  private _sweepRows = signal<
-    Array<{ th: number; trades: number; winRate: number; pnlPct: number }>
-  >([]);
-  sweepRows = this._sweepRows.asReadonly();
-
   sortKey = signal<SortKey>('pnlPct');
   sortDir = signal<'asc' | 'desc'>('desc');
 
+  // ---------- Lifecycle ----------
+  async ngOnInit() {
+    const s = this.settings?.load?.();
+    if (s) {
+      this.entryBps = s.entryBps ?? this.entryBps;
+      this.exitBps = s.exitBps ?? this.exitBps;
+      this.longTh = s.longTh ?? this.longTh;
+      if (Array.isArray(s.symbols) && s.symbols.length) {
+        this.symbols = s.symbols.slice(0, 64);
+      }
+    }
+    await this.recompute();
+  }
+
+  // ---------- Knobs ----------
+  onKnobChange() {
+    this.settings?.save?.({
+      entryBps: this.entryBps,
+      exitBps: this.exitBps,
+      longTh: this.longTh,
+      symbols: this.symbols,
+    });
+  }
+
+  async resetBacktestSettings() {
+    this.entryBps = 5;
+    this.exitBps = 3;
+    this.longTh = 0.62;
+    this.symbols = [...this.defaultSymbols];
+    this.onKnobChange();
+    await this.recompute();
+  }
+
+  // ---------- Sorting ----------
   sortedRows = computed(() => {
     const key = this.sortKey();
     const dir = this.sortDir();
@@ -136,16 +172,13 @@ export class BacktestsComponent {
     arr.sort((a, b) => {
       const av = valueOf(a);
       const bv = valueOf(b);
-
       if (typeof av === 'string' || typeof bv === 'string') {
         const cmp = String(av).localeCompare(String(bv));
         return dir === 'asc' ? cmp : -cmp;
       }
-
       const cmp = (av as number) - (bv as number);
       return dir === 'asc' ? cmp : -cmp;
     });
-
     return arr;
   });
 
@@ -167,19 +200,7 @@ export class BacktestsComponent {
     }
   }
 
-  async ngOnInit() {
-    const s = this.settings?.load?.();
-    if (s) {
-      this.entryBps = s.entryBps ?? this.entryBps;
-      this.exitBps = s.exitBps ?? this.exitBps;
-      this.longTh = s.longTh ?? this.longTh;
-      if (Array.isArray(s.symbols) && s.symbols.length) {
-        this.symbols = s.symbols.slice(0, 64);
-      }
-    }
-    await this.recompute();
-  }
-
+  // ---------- Recompute ----------
   async recompute() {
     this.loading.set(true);
     const results: BacktestSummary[] = [];
@@ -189,14 +210,18 @@ export class BacktestsComponent {
       const bars15 = await firstValueFrom(this.market.getBars15m(s, '5d'));
       if (bars15.length < 30) continue;
 
-      // Build feature set
       const labeled = makeNext15mLabels(bars15);
       const builtFeats = buildFeatures(labeled, s);
-      const feats: FeatureVector[] = builtFeats.map((f) => f.feats);
+
+      // Strip client-only field `mod` before sending to the API
+      const feats: FeatureVector[] = builtFeats.map((f) => {
+        const { mod, ...rest } = f.feats as any;
+        return rest as FeatureVector;
+      });
 
       // Run AI predictor
       const aiReq = { symbol: s, feats };
-      const aiResult = await this.predictor.predict(s, feats);
+      const aiResult = await firstValueFrom(this.predictor.predict(aiReq));
       console.log('AI Prediction', s, aiResult);
 
       const { row, metrics } = runMlBacktest(
@@ -217,11 +242,141 @@ export class BacktestsComponent {
     this._metricsBySymbol.set(metricsMap);
     this.loading.set(false);
   }
+
+  // ---------- Sweep Chart ----------
+  sweepChart = computed(() => {
+    const data = this.sweepRows();
+    const W = this.chartW;
+    const H = this.chartH;
+    const P = this.chartPad;
+
+    if (!data.length) {
+      return { winPath: '', pnlPath: '', points: [], xTicks: [], yTicksLeft: [], yTicksRight: [] };
+    }
+
+    const thMin = Math.min(...data.map((d) => d.th));
+    const thMax = Math.max(...data.map((d) => d.th));
+    const pnlMin = Math.min(...data.map((d) => d.pnlPct));
+    const pnlMax = Math.max(...data.map((d) => d.pnlPct));
+    const pnlRange = pnlMax - pnlMin || 1e-9;
+
+    const x = (t: number) => P + ((t - thMin) / (thMax - thMin || 1e-9)) * (W - 2 * P);
+    const yWin = (w: number) => H - P - w * (H - 2 * P);
+    const yPnl = (p: number) => H - P - ((p - pnlMin) / pnlRange) * (H - 2 * P);
+
+    const winPts = data.map((d) => `${x(d.th)},${yWin(d.winRate)}`).join(' ');
+    const pnlPts = data.map((d) => `${x(d.th)},${yPnl(d.pnlPct)}`).join(' ');
+
+    const xTicks = [];
+    for (let t = thMin; t <= thMax + 1e-9; t += 0.04) {
+      const tt = Number(t.toFixed(2));
+      xTicks.push({ x: x(tt), label: tt.toFixed(2) });
+    }
+
+    const yTicksLeft = [];
+    for (let w = 0; w <= 1 + 1e-9; w += 0.25) {
+      yTicksLeft.push({ y: yWin(w), label: `${Math.round(w * 100)}%` });
+    }
+
+    const yTicksRight = [];
+    const steps = 4;
+    for (let i = 0; i <= steps; i++) {
+      const p = pnlMin + (i / steps) * pnlRange;
+      yTicksRight.push({ y: yPnl(p), label: `${(p * 100).toFixed(1)}%` });
+    }
+
+    const points = data.map((d) => ({
+      x: x(d.th),
+      yWin: yWin(d.winRate),
+      yPnl: yPnl(d.pnlPct),
+      th: d.th,
+      win: d.winRate,
+      pnl: d.pnlPct,
+    }));
+
+    return {
+      winPath: `M ${winPts}`,
+      pnlPath: `M ${pnlPts}`,
+      points,
+      xTicks,
+      yTicksLeft,
+      yTicksRight,
+    };
+  });
+
+  sweepScale = computed(() => {
+    const data = this.sweepRows();
+    const W = this.chartW;
+    const P = this.chartPad;
+    const innerW = Math.max(1e-9, W - 2 * P);
+
+    if (!data.length) {
+      return {
+        thToX: (_th: number) => P,
+        xToTh: (_px: number) => this.longTh,
+        domain: { thMin: this.longTh, thMax: this.longTh },
+      };
+    }
+
+    const thMin = Math.min(...data.map((d) => d.th));
+    const thMax = Math.max(...data.map((d) => d.th));
+    const span = Math.max(1e-9, thMax - thMin);
+
+    return {
+      thToX: (th: number) => {
+        const t = Math.min(1, Math.max(0, (th - thMin) / span));
+        return P + t * innerW;
+      },
+      xToTh: (px: number) => {
+        const t = Math.min(1, Math.max(0, (px - P) / innerW));
+        return thMin + t * span;
+      },
+      domain: { thMin, thMax },
+    };
+  });
+
+  async applyThreshold(th: number) {
+    if (this.loading()) return;
+    this.longTh = Number(th.toFixed(2));
+    this.onKnobChange();
+    await this.recompute();
+  }
+
+  async onSweepChartClick(evt: MouseEvent) {
+    if (this.loading()) return;
+    const rect = (evt.currentTarget as SVGElement).getBoundingClientRect();
+    const x = evt.clientX - rect.left;
+    const newTh = this.sweepScale().xToTh(x);
+    await this.applyThreshold(newTh);
+  }
+
+  async sweep() {
+    this.loading.set(true);
+    const out: Array<{ th: number; trades: number; winRate: number; pnlPct: number }> = [];
+
+    const thresholds: number[] = [];
+    for (let t = 0.54; t <= 0.7 + 1e-9; t += 0.02) thresholds.push(Number(t.toFixed(2)));
+
+    const s = this.symbols[0];
+    const bars15 = await firstValueFrom(this.market.getBars15m(s, '5d'));
+    if (bars15.length >= 30) {
+      const labeled = makeNext15mLabels(bars15);
+      const feats = buildFeatures(labeled, s).map((f) => f.feats);
+      for (const th of thresholds) {
+        const { row } = runMlBacktest(s, bars15, labeled, feats, this.entryBps, this.exitBps, th);
+        out.push({ th, trades: row.trades, winRate: row.winRate, pnlPct: row.pnlPct });
+      }
+    }
+
+    this._sweepRows.set(out);
+    this.onKnobChange();
+    this.loading.set(false);
+  }
 }
 
 /* ===========================
-   Helpers: mock ML predictor
-   =========================== */
+   Helpers
+=========================== */
 
 function sigmoid(x: number): number {
   return 1 / (1 + Math.exp(-x));

@@ -37,6 +37,9 @@ export class FeatureVectorDto {
 
   @IsNumber()
   spy15m: number;
+
+  @IsNumber()
+  mod?: number;
 }
 
 /**
