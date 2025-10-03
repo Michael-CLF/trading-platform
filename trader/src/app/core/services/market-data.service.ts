@@ -5,6 +5,8 @@ import { Observable, forkJoin, of, throwError, timer } from 'rxjs';
 import { catchError, map, retry, shareReplay, timeout } from 'rxjs/operators';
 import { environment } from '../../../environments/environment.development';
 import { Quote } from '../shared/models/quote.model';
+import { Bar1m, Bar15m } from '../shared/models/bar.model';
+import { aggregateTo15m } from '../shared/utils/bars.utils';
 
 /** Shape used by chart components after transformation */
 export interface UiBar {
@@ -49,6 +51,10 @@ export class MarketDataService {
   /** Short-lived cache to prevent duplicate quote calls while a request is in flight */
   private readonly quoteCache = new Map<string, Observable<Quote>>();
   private readonly CACHE_DURATION_MS = 5_000;
+  // below CACHE_DURATION_MS
+  private readonly barsCacheMs = 60_000; // cache bars for 60s to avoid re-fetch bursts
+  private readonly bars1mCache = new Map<string, Observable<Bar1m[]>>();
+  private readonly bars15mCache = new Map<string, Observable<Bar15m[]>>();
 
   // ------------------------ Quotes ------------------------
 
@@ -199,6 +205,56 @@ export class MarketDataService {
         })),
       ),
     );
+  }
+  // replace your current mapPointsToBar1m with this version
+  private mapPointsToBar1m(points: BarsResponse['points']): Bar1m[] {
+    if (!points?.length) return [];
+    return points
+      .map((p) => ({
+        ts: p.t,
+        o: p.o,
+        h: p.h,
+        l: p.l,
+        c: p.c,
+        v: p.v ?? 0,
+      }))
+      .sort((a, b) => a.ts.localeCompare(b.ts));
+  }
+
+  // replace your current getBars1m with this version
+  getBars1m(symbol: string, range: string, timezone?: string): Observable<Bar1m[]> {
+    const key = `${symbol.toUpperCase()}|1m|${range}|${timezone ?? ''}`;
+
+    const cached = this.bars1mCache.get(key);
+    if (cached) return cached;
+
+    const stream$ = this.getBars(symbol, '1m', range, timezone).pipe(
+      map((res) => this.mapPointsToBar1m(res.points)),
+      shareReplay({ bufferSize: 1, refCount: false }),
+    );
+
+    this.bars1mCache.set(key, stream$);
+    setTimeout(() => this.bars1mCache.delete(key), this.barsCacheMs);
+
+    return stream$;
+  }
+
+  // replace your current getBars15m with this version
+  getBars15m(symbol: string, range: string, timezone?: string): Observable<Bar15m[]> {
+    const key = `${symbol.toUpperCase()}|15m|${range}|${timezone ?? ''}`;
+
+    const cached = this.bars15mCache.get(key);
+    if (cached) return cached;
+
+    const stream$ = this.getBars1m(symbol, range, timezone).pipe(
+      map((bar1m) => aggregateTo15m(bar1m)),
+      shareReplay({ bufferSize: 1, refCount: false }),
+    );
+
+    this.bars15mCache.set(key, stream$);
+    setTimeout(() => this.bars15mCache.delete(key), this.barsCacheMs);
+
+    return stream$;
   }
 
   // ------------------------ Errors ------------------------

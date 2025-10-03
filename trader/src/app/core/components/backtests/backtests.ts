@@ -62,11 +62,11 @@ export class BacktestsComponent {
     const results: BacktestResult[] = [];
 
     for (const s of this.symbols) {
-      const bars = await firstValueFrom(
-        this.market.getBarsForUi(s, '15m', '5d', 'America/New_York'),
+      const bars15 = await firstValueFrom(
+        this.market.getBars15m(s, '5d'), // canonical aggregation from 1m
       );
-      if (bars.length < 30) continue;
-      results.push(runSmaBacktest(s, bars, 5, 20));
+      if (bars15.length < 30) continue;
+      results.push(runSmaBacktest(s, bars15, 5, 20));
     }
 
     this.rows.set(results);

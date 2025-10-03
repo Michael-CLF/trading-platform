@@ -7,11 +7,14 @@ export interface BacktestMetrics {
   avgWin: number;
   avgLoss: number;
 }
+import { Trade } from './trade.model';
+import { Metrics } from './metrics.model';
 
-export interface BacktestSummary {
-  id: string;
-  name: string;
-  metrics: BacktestMetrics;
-  from: string;
-  to: string;
+/**
+ * Full backtest result for a strategy/model over a time period.
+ */
+export interface BacktestResult {
+  equityCurve: Array<{ ts: string; equity: number }>;
+  trades: Trade[];
+  metrics: Metrics;
 }
