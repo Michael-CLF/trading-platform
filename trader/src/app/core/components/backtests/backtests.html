@@ -39,7 +39,9 @@
     </div>
 
     <div *ngIf="sweepRows().length">
-        <svg [attr.viewBox]="'0 0 ' + chartW + ' ' + chartH" class="w-full max-w-4xl">
+        <svg [attr.viewBox]="'0 0 ' + chartW + ' ' + chartH" class="w-full max-w-4xl"
+            (click)="onSweepChartClick($event)">
+
             <!-- axes -->
             <line [attr.x1]="chartPad" [attr.y1]="chartH - chartPad" [attr.x2]="chartW - chartPad"
                 [attr.y2]="chartH - chartPad" stroke="currentColor" stroke-width="1" />
@@ -68,6 +70,25 @@
                     stroke="currentColor" stroke-width="1" />
                 <text [attr.x]="t.x" [attr.y]="chartH - chartPad + 16" text-anchor="middle" font-size="11">{{ t.label
                     }}</text>
+            </g>
+
+            <!-- current threshold marker -->
+            <line [attr.x1]="sweepScale().thToX(longTh)" [attr.y1]="chartPad" [attr.x2]="sweepScale().thToX(longTh)"
+                [attr.y2]="chartH - chartPad" stroke="currentColor" stroke-dasharray="4 4" stroke-width="1.5"
+                opacity="0.8" />
+
+            <!-- points with tooltips (WIN) -->
+            <g *ngFor="let p of sweepChart().points">
+                <circle [attr.cx]="p.x" [attr.cy]="p.yWin" r="3" style="cursor:pointer"
+                    (click)="applyThreshold(p.th)" />
+                <title>th={{ p.th | number:'1.2-2' }} • win={{ p.win | percent:'1.0-1' }}</title>
+            </g>
+
+            <!-- points with tooltips (PNL) -->
+            <g *ngFor="let p of sweepChart().points">
+                <circle [attr.cx]="p.x" [attr.cy]="p.yPnl" r="3" opacity="0.65" style="cursor:pointer"
+                    (click)="applyThreshold(p.th)" />
+                <title>th={{ p.th | number:'1.2-2' }} • pnl={{ p.pnl | percent:'1.0-2' }}</title>
             </g>
 
             <!-- paths -->
@@ -127,6 +148,11 @@
 
     <button (click)="recompute()" [disabled]="loading()">Run backtest</button>
 </div>
+<button class="px-3 py-1 rounded border border-gray-600 hover:bg-gray-700 ml-2" (click)="resetBacktestSettings()"
+    [disabled]="loading()">
+    Reset defaults
+</button>
+
 
 <div class="p-6 max-w-3xl">
     <h2 class="text-xl mb-4">Backtests (5/20 SMA)</h2>
@@ -188,7 +214,7 @@
 
 
         <tbody>
-            <tr *ngFor="let r of sortedRows()">
+            <tr *ngFor="let r of sortedRows(); trackBy: trackBySymbol">
                 <td class="py-2 px-3">{{ r.symbol }}</td>
                 <td class="py-2 px-3">{{ r.trades | number: '1.0-0' }}</td>
                 <td class="py-2 px-3">{{ r.winRate | percent: '1.0-1' }}</td>
@@ -218,8 +244,6 @@
         <input type="number" min="0.5" max="0.9" step="0.01" [(ngModel)]="longTh" (ngModelChange)="onKnobChange()"
             style="width:80px; margin-left:6px;">
     </label>
-
-
 
     <div *ngIf="!loading() && !rows().length" class="opacity-70">
         No results for this window.

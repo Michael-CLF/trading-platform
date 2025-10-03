@@ -21,6 +21,7 @@ import {
   cagrFromEquity,
 } from '../../shared/utils/metrics.utils';
 import { BacktestsSettingsService } from '../../services/backtests-settings.service';
+import { PredictorService } from '../../services/predictor.service';
 
 // --- Sorting keys (MUST be outside the class) ---
 type SortKey =
@@ -44,9 +45,11 @@ type SortKey =
 export class BacktestsComponent {
   private readonly market = inject(MarketDataService);
   private readonly settings = inject(BacktestsSettingsService, { optional: true });
+  private readonly predictor = inject(PredictorService);
 
   loading = signal(true);
   rows = signal<BacktestSummary[]>([]);
+  trackBySymbol = (_: number, r: { symbol: string }) => r.symbol;
 
   // UI knobs
   entryBps = 5;
@@ -57,6 +60,24 @@ export class BacktestsComponent {
   chartW = 720;
   chartH = 260;
   chartPad = 36;
+
+  /** Map a threshold to the current chart X (forward of xToTh). */
+  thToX(th: number): number {
+    const data = this.sweepRows();
+    if (!data.length) return this.chartPad;
+
+    const W = this.chartW;
+    const P = this.chartPad;
+    const innerW = Math.max(1e-9, W - 2 * P);
+
+    const thMin = Math.min(...data.map((d) => d.th));
+    const thMax = Math.max(...data.map((d) => d.th));
+    const span = Math.max(1e-9, thMax - thMin);
+
+    // normalize threshold to [0,1] within domain
+    const t = Math.min(1, Math.max(0, (th - thMin) / span));
+    return P + t * innerW;
+  }
 
   // Defaults + working symbols
   private defaultSymbols = [
@@ -265,6 +286,12 @@ export class BacktestsComponent {
     }
     await this.recompute();
   }
+  async applyThreshold(th: number) {
+    if (this.loading()) return;
+    this.longTh = Number(th.toFixed(2));
+    this.onKnobChange();
+    await this.recompute();
+  }
 
   // Save settings helper (no-op if service missing)
   private saveSettings() {
@@ -280,6 +307,30 @@ export class BacktestsComponent {
   onKnobChange() {
     this.saveSettings();
   }
+  async resetBacktestSettings() {
+    // restore default knobs
+    this.entryBps = 5;
+    this.exitBps = 3;
+    this.longTh = 0.62;
+
+    // restore the initial default symbol list
+    // (you already have: private defaultSymbols = [ ... ])
+    this.symbols = [...this.defaultSymbols];
+
+    // persist + recompute
+    this.onKnobChange();
+    await this.recompute();
+  }
+
+  async onSweepChartClick(evt: MouseEvent) {
+    if (this.loading()) return;
+
+    const rect = (evt.currentTarget as SVGElement).getBoundingClientRect();
+    const x = evt.clientX - rect.left;
+    const newTh = this.sweepScale().xToTh(x);
+
+    await this.applyThreshold(newTh); // sets longTh, saves, recomputes
+  }
 
   // Re-run backtests with current knobs
   async recompute() {
@@ -294,11 +345,13 @@ export class BacktestsComponent {
       const labeled: LabeledBar15m[] = makeNext15mLabels(bars15);
       const feats: FeatureVector[] = buildFeatures(labeled, s);
 
-      const { row, metrics } = runMlBacktest(
+      const probs: number[] = await this.predictor.predictBatch(s, feats);
+
+      const { row, metrics } = runMlBacktestFromProbs(
         s,
         bars15,
         labeled,
-        feats,
+        probs,
         this.entryBps,
         this.exitBps,
         this.longTh,
@@ -313,6 +366,40 @@ export class BacktestsComponent {
     this.saveSettings();
     this.loading.set(false);
   }
+  // One source of truth for sweep scaling (threshold <-> pixels)
+  sweepScale = computed(() => {
+    const data = this.sweepRows();
+    const W = this.chartW;
+    const P = this.chartPad;
+    const innerW = Math.max(1e-9, W - 2 * P);
+
+    if (!data.length) {
+      // safe fallbacks; still return functions so template doesn't break
+      return {
+        thToX: (_th: number) => P,
+        xToTh: (_px: number) => this.longTh,
+        domain: { thMin: this.longTh, thMax: this.longTh },
+      };
+    }
+
+    const thMin = Math.min(...data.map((d) => d.th));
+    const thMax = Math.max(...data.map((d) => d.th));
+    const span = Math.max(1e-9, thMax - thMin);
+
+    const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
+
+    const thToX = (th: number) => {
+      const t = clamp01((th - thMin) / span);
+      return P + t * innerW;
+    };
+
+    const xToTh = (px: number) => {
+      const t = clamp01((px - P) / innerW);
+      return thMin + t * span;
+    };
+
+    return { thToX, xToTh, domain: { thMin, thMax } };
+  });
 
   // Small threshold sweep to help pick a good LONG threshold
   async sweep() {
@@ -328,9 +415,17 @@ export class BacktestsComponent {
     if (bars15.length >= 30) {
       const labeled = makeNext15mLabels(bars15);
       const feats = buildFeatures(labeled, s);
-
+      const probs: number[] = await this.predictor.predictBatch(s, feats);
       for (const th of thresholds) {
-        const { row } = runMlBacktest(s, bars15, labeled, feats, this.entryBps, this.exitBps, th);
+        const { row } = runMlBacktestFromProbs(
+          s,
+          bars15,
+          labeled,
+          probs,
+          this.entryBps,
+          this.exitBps,
+          th,
+        );
         out.push({ th, trades: row.trades, winRate: row.winRate, pnlPct: row.pnlPct });
       }
     }
@@ -432,6 +527,56 @@ function runMlBacktest(
     winRate: metrics.hitRate,
     pnlPct,
   };
+
+  return { row, metrics };
+}
+/** Same as runMlBacktest, but receives precomputed probabilities. */
+function runMlBacktestFromProbs(
+  symbol: string,
+  bars15: Bar15m[],
+  labeled: LabeledBar15m[],
+  probs: number[],
+  entryBps: number,
+  exitBps: number,
+  longTh: number,
+): { row: BacktestSummary; metrics: Metrics } {
+  let trades = 0;
+  let wins = 0;
+
+  const stepReturns: number[] = [];
+  const stepTs: string[] = [];
+
+  const n = Math.min(labeled.length, probs.length);
+
+  for (let i = 0; i < n; i++) {
+    const p = probs[i];
+    if (i + 1 >= bars15.length) break;
+
+    if (p >= longTh) {
+      const entry = bars15[i].c;
+      const exit = bars15[i + 1].c;
+      const gross = exit / entry - 1;
+      const net = applyPerSideCosts(gross, entryBps, exitBps);
+
+      if (net > 0) wins++;
+      trades++;
+
+      stepReturns.push(net);
+      stepTs.push(bars15[i + 1].ts15);
+    }
+  }
+
+  const curve = buildEquityCurve(stepTs, stepReturns, 1);
+  const metrics: Metrics = {
+    cagr: cagrFromEquity(curve),
+    sharpe: sharpe(stepReturns),
+    maxDd: maxDrawdown(curve.map((p) => p.equity)),
+    hitRate: trades ? wins / trades : 0,
+    turnover: trades / Math.max(stepReturns.length, 1),
+  };
+
+  const pnlPct = (curve.at(-1)?.equity ?? 1) - 1;
+  const row: BacktestSummary = { symbol, trades, winRate: metrics.hitRate, pnlPct };
 
   return { row, metrics };
 }
