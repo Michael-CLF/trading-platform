@@ -4,9 +4,11 @@ import { CacheModule } from '@nestjs/cache-manager';
 import configuration from './config/configuration';
 import { AppController } from './app.controller';
 import { MarketModule } from './market/market.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
+    AiModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
