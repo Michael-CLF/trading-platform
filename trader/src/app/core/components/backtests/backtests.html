@@ -2,7 +2,8 @@
 <div class="bt-threshold" style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
     <label>
         Entry threshold (Pr↑)
-        <input type="number" min="0.5" max="0.9" step="0.01" [(ngModel)]="longTh" style="width:80px; margin-left:6px;">
+        <input type="number" min="0.5" max="0.9" step="0.01" [(ngModel)]="longTh"
+            style="width: 80px;margin-left: 6px;color: black;border-radius: 4px;padding: 4px 8px;">
     </label>
 
     <button (click)="recompute()" [disabled]="loading()">Run backtest</button>
