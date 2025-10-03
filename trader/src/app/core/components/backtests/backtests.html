@@ -1,3 +1,133 @@
+<!---backtests-html-->
+<div class="bt-threshold" style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
+    <label>
+        Entry threshold (Pr↑)
+        <input type="number" min="0.5" max="0.9" step="0.01" [(ngModel)]="longTh" style="width:80px; margin-left:6px;">
+    </label>
+
+    <button (click)="recompute()" [disabled]="loading()">Run backtest</button>
+    <button (click)="sweep()" [disabled]="loading()">Sweep thresholds</button>
+</div>
+<!-- ⬇️ Metrics per symbol -->
+<div *ngFor="let r of rows()" class="metrics-card"
+    style="margin:12px 0; padding:12px; border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <strong>{{ r.symbol }}</strong>
+        <span>
+            Trades: <b>{{ r.trades }}</b> ·
+            Win rate: <b>{{ r.winRate | percent:'1.0-1' }}</b> ·
+            PnL: <b [style.color]="(r.pnlPct >= 0 ? '#53d769' : '#ff3b30')">{{ r.pnlPct | percent:'1.1-1' }}</b>
+        </span>
+    </div>
+
+    <div *ngIf="metricsBySymbol()[r.symbol] as m" style="margin-top:8px; display:flex; gap:24px; flex-wrap:wrap;">
+        <div>Sharpe: <b>{{ m.sharpe | number:'1.2-2' }}</b></div>
+        <div>Max DD: <b>{{ m.maxDd | percent:'1.1-1' }}</b></div>
+        <div>CAGR: <b>{{ m.cagr | percent:'1.1-1' }}</b></div>
+        <div>Hit Rate: <b>{{ m.hitRate | percent:'1.0-1' }}</b></div>
+        <div>Turnover: <b>{{ m.turnover | number:'1.2-2' }}</b></div>
+    </div>
+</div>
+<!-- Threshold tuning (ROC-like) -->
+<div class="mt-6">
+    <div class="flex items-center gap-3 mb-2">
+        <h2 class="text-xl">Threshold sweep</h2>
+        <button class="px-3 py-1 rounded border border-gray-600 hover:bg-gray-700" (click)="sweep()"
+            [disabled]="loading()">Run sweep</button>
+        <div *ngIf="loading()">Running…</div>
+        <div *ngIf="!loading() && !sweepRows().length" class="opacity-70">No sweep data yet.</div>
+    </div>
+
+    <div *ngIf="sweepRows().length">
+        <svg [attr.viewBox]="'0 0 ' + chartW + ' ' + chartH" class="w-full max-w-4xl">
+            <!-- axes -->
+            <line [attr.x1]="chartPad" [attr.y1]="chartH - chartPad" [attr.x2]="chartW - chartPad"
+                [attr.y2]="chartH - chartPad" stroke="currentColor" stroke-width="1" />
+            <line [attr.x1]="chartPad" [attr.y1]="chartPad" [attr.x2]="chartPad" [attr.y2]="chartH - chartPad"
+                stroke="currentColor" stroke-width="1" />
+            <line [attr.x1]="chartW - chartPad" [attr.y1]="chartPad" [attr.x2]="chartW - chartPad"
+                [attr.y2]="chartH - chartPad" stroke="currentColor" stroke-width="1" />
+
+            <!-- left y ticks (win rate) -->
+            <g *ngFor="let t of sweepChart().yTicksLeft">
+                <line [attr.x1]="chartPad - 4" [attr.y1]="t.y" [attr.x2]="chartPad" [attr.y2]="t.y"
+                    stroke="currentColor" stroke-width="1" />
+                <text [attr.x]="chartPad - 8" [attr.y]="t.y + 4" text-anchor="end" font-size="11">{{ t.label }}</text>
+            </g>
+
+            <!-- right y ticks (pnl pct) -->
+            <g *ngFor="let t of sweepChart().yTicksRight">
+                <line [attr.x1]="chartW - chartPad" [attr.y1]="t.y" [attr.x2]="chartW - chartPad + 4" [attr.y2]="t.y"
+                    stroke="currentColor" stroke-width="1" />
+                <text [attr.x]="chartW - chartPad + 8" [attr.y]="t.y + 4" font-size="11">{{ t.label }}</text>
+            </g>
+
+            <!-- x ticks (threshold) -->
+            <g *ngFor="let t of sweepChart().xTicks">
+                <line [attr.x1]="t.x" [attr.y1]="chartH - chartPad" [attr.x2]="t.x" [attr.y2]="chartH - chartPad + 4"
+                    stroke="currentColor" stroke-width="1" />
+                <text [attr.x]="t.x" [attr.y]="chartH - chartPad + 16" text-anchor="middle" font-size="11">{{ t.label
+                    }}</text>
+            </g>
+
+            <!-- paths -->
+            <path [attr.d]="sweepChart().winPath" fill="none" stroke="currentColor" stroke-width="2" />
+            <path [attr.d]="sweepChart().pnlPath" fill="none" stroke="currentColor" stroke-width="2" opacity="0.65" />
+
+            <!-- points with tooltips -->
+            <g *ngFor="let p of sweepChart().points">
+                <circle [attr.cx]="p.x" [attr.cy]="p.yWin" r="3" />
+                <title>th={{ p.th | number:'1.2-2' }} • win={{ p.win | percent:'1.0-1' }}</title>
+            </g>
+            <g *ngFor="let p of sweepChart().points">
+                <circle [attr.cx]="p.x" [attr.cy]="p.yPnl" r="3" opacity="0.65" />
+                <title>th={{ p.th | number:'1.2-2' }} • pnl={{ p.pnl | percent:'1.0-2' }}</title>
+            </g>
+
+            <!-- legend -->
+            <g>
+                <rect [attr.x]="chartPad" [attr.y]="chartPad - 26" width="220" height="20" fill="transparent" />
+                <text [attr.x]="chartPad" [attr.y]="chartPad - 12" font-size="12">Win rate (left) — Return
+                    (right)</text>
+            </g>
+        </svg>
+    </div>
+</div>
+
+
+<!-- Optional: show sweep results -->
+<table *ngIf="sweepRows().length" style="width:100%; margin:8px 0 16px 0; border-collapse: collapse;">
+    <thead>
+        <tr>
+            <th style="text-align:left;">Threshold</th>
+            <th style="text-align:right;">Trades</th>
+            <th style="text-align:right;">Win Rate</th>
+            <th style="text-align:right;">PnL %</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr *ngFor="let r of sweepRows()">
+            <td>{{ r.th | number:'1.2-2' }}</td>
+            <td style="text-align:right;">{{ r.trades }}</td>
+            <td style="text-align:right;">{{ r.winRate | percent:'1.0-1' }}</td>
+            <td style="text-align:right;">{{ r.pnlPct | percent:'1.1-1' }}</td>
+        </tr>
+    </tbody>
+</table>
+<div class="bt-controls" style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
+    <label>
+        Entry cost (bps)
+        <input type="number" min="0" step="1" [(ngModel)]="entryBps" style="width:80px; margin-left:6px;">
+    </label>
+
+    <label>
+        Exit cost (bps)
+        <input type="number" min="0" step="1" [(ngModel)]="exitBps" style="width:80px; margin-left:6px;">
+    </label>
+
+    <button (click)="recompute()" [disabled]="loading()">Run backtest</button>
+</div>
+
 <div class="p-6 max-w-3xl">
     <h2 class="text-xl mb-4">Backtests (5/20 SMA)</h2>
     <div *ngIf="loading()">Running…</div>
@@ -5,22 +135,91 @@
     <table *ngIf="!loading() && rows().length" class="w-full border-collapse">
         <thead>
             <tr class="text-left border-b border-gray-700">
-                <th class="py-2 px-3">Symbol</th>
-                <th class="py-2 px-3">Trades</th>
-                <th class="py-2 px-3">Win rate</th>
-                <th class="py-2 px-3">Return</th>
+                <th class="py-2 px-3 cursor-pointer" (click)="setSort('symbol')">
+                    Symbol
+                    <span *ngIf="sortKey() === 'symbol'">
+                        {{ sortDir() === 'asc' ? '▲' : '▼' }}
+                    </span>
+                </th>
+                <th class="py-2 px-3 cursor-pointer" (click)="setSort('trades')">
+                    Trades
+                    <span *ngIf="sortKey() === 'trades'">
+                        {{ sortDir() === 'asc' ? '▲' : '▼' }}
+                    </span>
+                </th>
+                <th class="py-2 px-3 cursor-pointer" (click)="setSort('winRate')">
+                    Win rate
+                    <span *ngIf="sortKey() === 'winRate'">
+                        {{ sortDir() === 'asc' ? '▲' : '▼' }}
+                    </span>
+                </th>
+                <th class="py-2 px-3 cursor-pointer" (click)="setSort('pnlPct')">
+                    Return
+                    <span *ngIf="sortKey() === 'pnlPct'">
+                        {{ sortDir() === 'asc' ? '▲' : '▼' }}
+                    </span>
+                </th>
+                <th class="py-2 px-3 cursor-pointer" (click)="setSort('sharpe')">
+                    Sharpe
+                    <span *ngIf="sortKey() === 'sharpe'">
+                        {{ sortDir() === 'asc' ? '▲' : '▼' }}
+                    </span>
+                </th>
+                <th class="py-2 px-3 cursor-pointer" (click)="setSort('cagr')">
+                    CAGR
+                    <span *ngIf="sortKey() === 'cagr'">
+                        {{ sortDir() === 'asc' ? '▲' : '▼' }}
+                    </span>
+                </th>
+                <th class="py-2 px-3 cursor-pointer" (click)="setSort('maxDd')">
+                    MaxDD
+                    <span *ngIf="sortKey() === 'maxDd'">
+                        {{ sortDir() === 'asc' ? '▲' : '▼' }}
+                    </span>
+                </th>
+                <th class="py-2 px-3 cursor-pointer" (click)="setSort('turnover')">
+                    Turnover
+                    <span *ngIf="sortKey() === 'turnover'">
+                        {{ sortDir() === 'asc' ? '▲' : '▼' }}
+                    </span>
+                </th>
             </tr>
         </thead>
+
+
         <tbody>
-            <tr *ngFor="let r of rows()">
+            <tr *ngFor="let r of sortedRows()">
                 <td class="py-2 px-3">{{ r.symbol }}</td>
-                <td class="py-2 px-3">{{ r.trades | number:'1.0-0' }}</td>
-                <td class="py-2 px-3">{{ r.winRate | percent:'1.0-1' }}</td>
-                <td class="py-2 px-3">{{ r.pnlPct | percent:'1.0-2' }}</td>
+                <td class="py-2 px-3">{{ r.trades | number: '1.0-0' }}</td>
+                <td class="py-2 px-3">{{ r.winRate | percent: '1.0-1' }}</td>
+                <td class="py-2 px-3">{{ r.pnlPct | percent: '1.0-2' }}</td>
+                <td class="py-2 px-3">{{ metricsBySymbol()[r.symbol].sharpe | number: '1.2-2' }}</td>
+                <td class="py-2 px-3">{{ metricsBySymbol()[r.symbol].cagr | percent: '1.0-2' }}</td>
+                <td class="py-2 px-3">{{ metricsBySymbol()[r.symbol].maxDd | percent: '1.0-2' }}</td>
+                <td class="py-2 px-3">{{ metricsBySymbol()[r.symbol].turnover | number: '1.2-2' }}</td>
             </tr>
         </tbody>
 
     </table>
+    <label>
+        Entry cost (bps)
+        <input type="number" min="0" step="1" [(ngModel)]="entryBps" (ngModelChange)="onKnobChange()"
+            style="width:80px; margin-left:6px;">
+    </label>
+
+    <label>
+        Exit cost (bps)
+        <input type="number" min="0" step="1" [(ngModel)]="exitBps" (ngModelChange)="onKnobChange()"
+            style="width:80px; margin-left:6px;">
+    </label>
+
+    <label>
+        Entry threshold (Pr↑)
+        <input type="number" min="0.5" max="0.9" step="0.01" [(ngModel)]="longTh" (ngModelChange)="onKnobChange()"
+            style="width:80px; margin-left:6px;">
+    </label>
+
+
 
     <div *ngIf="!loading() && !rows().length" class="opacity-70">
         No results for this window.

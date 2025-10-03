@@ -1,17 +1,20 @@
-export interface BacktestMetrics {
-  cagr: number;
-  sharpe: number;
-  sortino: number;
-  maxDrawdown: number;
-  winRate: number;
-  avgWin: number;
-  avgLoss: number;
-}
+// src/app/core/shared/models/backtest.models.ts
 import { Trade } from './trade.model';
 import { Metrics } from './metrics.model';
 
 /**
- * Full backtest result for a strategy/model over a time period.
+ * Lightweight per-symbol summary row (used by simple tables or services).
+ * winRate and pnlPct are fractions: 0..1
+ */
+export interface BacktestSummary {
+  symbol: string;
+  trades: number;
+  winRate: number; // 0..1
+  pnlPct: number; // 0..1
+}
+
+/**
+ * Full backtest result object for richer views (equity curve, metrics, trade ledger).
  */
 export interface BacktestResult {
   equityCurve: Array<{ ts: string; equity: number }>;
