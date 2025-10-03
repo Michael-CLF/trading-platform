@@ -1,9 +1,16 @@
-/**
- * Feature vector structure for model inputs.
- * Each 15-minute bar gets transformed into a feature vector for prediction.
- */
 export interface FeatureVector {
-  ts15: string; // ISO UTC timestamp aligned to 15m bar close
-  symbol: string; // e.g. "AAPL", "SPY", "^DJI"
-  feats: Record<string, number>; // r1, r5, r15, rsi14, atr14, etc.
+  r1: number;
+  r5: number;
+  r15: number;
+  r60: number;
+  rsi14: number;
+  emaGap9: number;
+  emaGap21: number;
+  atr14: number;
+  spy15m: number;
+}
+export interface BuiltFeatureRow {
+  ts15: string;
+  symbol: string;
+  feats: FeatureVector;
 }

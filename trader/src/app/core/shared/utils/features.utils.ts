@@ -1,21 +1,23 @@
 // src/app/core/shared/utils/features.utils.ts
 
 import { LabeledBar15m } from '../models/label.model';
-import { FeatureVector } from '../models/feature-vector.model';
+import { FeatureVector, BuiltFeatureRow } from '../models/feature-vector.model';
 
 /** ---------- math helpers ---------- */
 function ema(values: number[], period: number): number | null {
   if (values.length < period) return null;
   const k = 2 / (period + 1);
   let e = values[0];
-  for (let i = 1; i < values.length; i++) e = values[i] * k + e * (1 - k);
+  for (let i = 1; i < values.length; i++) {
+    e = values[i] * k + e * (1 - k);
+  }
   return e;
 }
 
 function rsi(values: number[], period = 14): number | null {
   if (values.length < period + 1) return null;
-  let gains = 0,
-    losses = 0;
+  let gains = 0;
+  let losses = 0;
   for (let i = values.length - period; i < values.length; i++) {
     const diff = values[i] - values[i - 1];
     if (diff >= 0) gains += diff;
@@ -33,8 +35,8 @@ function atr(highs: number[], lows: number[], closes: number[], period = 14): nu
   if (n < period + 1) return null;
   const trs: number[] = [];
   for (let i = n - period; i < n; i++) {
-    const h = highs[i],
-      l = lows[i];
+    const h = highs[i];
+    const l = lows[i];
     const prevClose = closes[i - 1];
     const tr = Math.max(h - l, Math.abs(h - prevClose), Math.abs(l - prevClose));
     trs.push(tr);
@@ -48,17 +50,12 @@ function pctChange(a: number, b: number): number {
 }
 
 /** ---------- feature builder ---------- */
-
-/**
- * Build feature vectors for each labeled bar (uses ONLY history ≤ t).
- * Assumes input is sorted ascending by ts15.
- */
 export function buildFeatures(
   labeled: LabeledBar15m[],
   symbol: string,
   spyContext?: Array<{ ts15: string; c: number }>,
-): FeatureVector[] {
-  const feats: FeatureVector[] = [];
+): BuiltFeatureRow[] {
+  const feats: BuiltFeatureRow[] = []; // ✅ FIX: declare feats
 
   const closes: number[] = [];
   const highs: number[] = [];
@@ -116,7 +113,7 @@ export function buildFeatures(
         atr14: atr14 ?? 0,
         spy15m,
         mod,
-      },
+      } as FeatureVector,
     });
   }
 
