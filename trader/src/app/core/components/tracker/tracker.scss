@@ -1,0 +1,115 @@
+.tracker {
+  width: 260px;
+  background: #0e0e10;
+  color: #eaeaea;
+  border: 1px solid #232323;
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .chip {
+    background: #0ea5e9;
+    color: #051923;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+  }
+
+  .title {
+    font-weight: 600;
+    font-size: 14px;
+  }
+}
+
+.kv {
+  display: grid;
+  gap: 10px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  .label {
+    color: #a1a1aa;
+    font-size: 12px;
+  }
+  .val {
+    font-weight: 600;
+  }
+}
+
+.row.big .val {
+  font-size: 18px;
+}
+
+.meter {
+  position: relative;
+  height: 10px;
+  background: #1a1a1d;
+  border-radius: 999px;
+  overflow: hidden;
+
+  .bar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0%;
+    background: linear-gradient(90deg, #22c55e, #16a34a);
+    transition: width 240ms ease;
+  }
+
+  .tick {
+    position: absolute;
+    top: -4px;
+    width: 2px;
+    height: 18px;
+    background: #eab308;
+    transform: translateX(-1px);
+  }
+}
+
+.good {
+  color: #22c55e;
+}
+.bad {
+  color: #f97316;
+}
+.suggest.buy {
+  color: #22c55e;
+}
+
+.foot {
+  display: flex;
+  gap: 8px;
+  color: #8a8a92;
+  font-size: 11px;
+
+  .err {
+    color: #ef4444;
+  }
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #2a2a2a;
+  border-top-color: #a1a1aa;
+  border-radius: 999px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,11 +1,13 @@
 // src/app/services/predictor.service.ts
-import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { Injectable, inject } from '@angular/core';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Observable, throwError } from 'rxjs';
+import { catchError, retry, timeout } from 'rxjs/operators';
 import { FeatureVector } from '../shared/models/feature-vector.model';
-import { Observable } from 'rxjs';
 
-// Must match the Nest DTO exactly
+/**
+ * Feature vector structure expected by the API
+ */
 export interface FeatureVectorApi {
   r1: number;
   r5: number;
@@ -16,53 +18,149 @@ export interface FeatureVectorApi {
   emaGap21: number;
   atr14: number;
   spy15m: number;
-  // If your DTO allows `mod`, keep it optional. If not allowed, remove it here.
-  mod?: number;
+  mod: number;
 }
 
+/**
+ * Prediction request payload
+ */
 export interface PredictRequest {
   symbol: string;
-  feats: FeatureVector[];
+  feats: (FeatureVector | FeatureVectorApi | any)[];
 }
 
+/**
+ * Prediction response from API
+ */
 export interface PredictResponse {
   probs: number[];
 }
 
 @Injectable({ providedIn: 'root' })
 export class PredictorService {
-  private baseUrl = 'http://localhost:4000/api/v1/ai';
-  constructor(private http: HttpClient) {}
+  // Angular 18 pattern: Use inject() for DI
+  private readonly http = inject(HttpClient);
 
-  // Keep this helper public so components can reuse it.
-  sanitizeForApi(f: any): FeatureVectorApi {
-    // Accept either {feats:{...}} or a flat feature object
-    const v = f?.feats ?? f ?? {};
+  // Use relative URL to work with proxy in development
+  private readonly baseUrl = '/api/v1/ai';
 
-    const num = (x: any) => (Number.isFinite(x) ? Number(x) : 0);
+  // Configuration
+  private readonly RETRY_COUNT = 2;
+  private readonly TIMEOUT_MS = 10000;
+  private readonly DEFAULT_MOD = 540; // Based on your working Postman example
 
-    const out: FeatureVectorApi = {
-      r1: num(v.r1),
-      r5: num(v.r5),
-      r15: num(v.r15),
-      r60: num(v.r60),
-      rsi14: num(v.rsi14),
-      emaGap9: num(v.emaGap9),
-      emaGap21: num(v.emaGap21),
-      atr14: num(v.atr14),
-      spy15m: num(v.spy15m),
+  /**
+   * Sanitizes and transforms feature data for API consumption
+   * @param feature - Raw feature data from component
+   * @returns Sanitized feature vector matching API requirements
+   */
+  sanitizeForApi(feature: FeatureVector | any): FeatureVectorApi {
+    // Handle both nested {feats: {...}} and flat objects
+    const source = feature?.feats ?? feature ?? {};
+
+    // Helper to safely convert to number with fallback
+    const toNumber = (value: any, defaultValue = 0): number => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : defaultValue;
     };
 
-    // If your Nest DTO ALLOWS `mod`, sanitize it to a non-negative int.
-    // If it does NOT allow `mod`, comment this out to exclude it.
-    if (v.mod != null && Number.isFinite(+v.mod)) {
-      out.mod = Math.max(0, Math.floor(+v.mod));
-    }
-
-    return out;
+    // Build the API-compliant object
+    return {
+      r1: toNumber(source.r1),
+      r5: toNumber(source.r5),
+      r15: toNumber(source.r15),
+      r60: toNumber(source.r60),
+      rsi14: toNumber(source.rsi14),
+      emaGap9: toNumber(source.emaGap9),
+      emaGap21: toNumber(source.emaGap21),
+      atr14: toNumber(source.atr14),
+      spy15m: toNumber(source.spy15m),
+      // Use mod from source if valid, otherwise use default
+      mod:
+        source.mod !== undefined && Number.isFinite(Number(source.mod))
+          ? Math.floor(Math.max(0, Number(source.mod)))
+          : this.DEFAULT_MOD,
+    };
   }
 
-  predict(req: PredictRequest): Observable<PredictResponse> {
-    return this.http.post<PredictResponse>(`${this.baseUrl}/predict`, req);
+  /**
+   * Sends prediction request to ML API
+   * @param request - Prediction request with symbol and features
+   * @returns Observable stream of prediction probabilities
+   */
+  predict(request: PredictRequest): Observable<PredictResponse> {
+    // Ensure all features are properly sanitized
+    const sanitizedRequest: PredictRequest = {
+      symbol: request.symbol,
+      feats: request.feats.map((feat) => this.sanitizeForApi(feat)),
+    };
+
+    return this.http
+      .post<PredictResponse>(`${this.baseUrl}/predict`, sanitizedRequest)
+      .pipe(
+        timeout(this.TIMEOUT_MS),
+        retry(this.RETRY_COUNT),
+        catchError(this.handleError.bind(this)),
+      );
+  }
+
+  /**
+   * Convenience method for single feature prediction
+   * @param symbol - Stock symbol
+   * @param feature - Single feature vector
+   * @returns Observable stream of prediction probability
+   */
+  predictSingle(symbol: string, feature: FeatureVector | any): Observable<number> {
+    const request: PredictRequest = {
+      symbol,
+      feats: [this.sanitizeForApi(feature)],
+    };
+
+    return new Observable((observer) => {
+      this.predict(request).subscribe({
+        next: (response) => {
+          if (response.probs && response.probs.length > 0) {
+            observer.next(response.probs[0]);
+            observer.complete();
+          } else {
+            observer.error(new Error('No probability returned from prediction'));
+          }
+        },
+        error: (error) => observer.error(error),
+      });
+    });
+  }
+
+  /**
+   * Handles HTTP errors with appropriate logging and user messages
+   */
+  private handleError(error: HttpErrorResponse): Observable<never> {
+    let errorMessage = 'Prediction service error';
+
+    if (error.status === 0) {
+      // Network or CORS error
+      errorMessage =
+        'Unable to connect to prediction service. Please check if the backend is running.';
+      console.error('Network error:', error);
+    } else if (error.status === 400) {
+      // Validation error
+      errorMessage = 'Invalid prediction data';
+      if (error.error?.message) {
+        errorMessage = Array.isArray(error.error.message)
+          ? error.error.message[0]
+          : error.error.message;
+      }
+      console.error('Validation error:', error.error);
+    } else if (error.status === 500) {
+      // Server error
+      errorMessage = 'Prediction service error. Please try again.';
+      console.error('Server error:', error);
+    } else {
+      // Other errors
+      errorMessage = `Error: ${error.message}`;
+      console.error('Unexpected error:', error);
+    }
+
+    return throwError(() => new Error(errorMessage));
   }
 }

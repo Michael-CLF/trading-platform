@@ -31,6 +31,10 @@ export const routes: Routes = [
           import('./core/components/signals/signals').then((m) => m.SignalsComponent),
         data: { title: 'Signals' },
       },
+      {
+        path: 'tracker',
+        loadComponent: () => import('./core/components/tracker/tracker').then((m) => m.Tracker),
+      },
     ],
   },
 
