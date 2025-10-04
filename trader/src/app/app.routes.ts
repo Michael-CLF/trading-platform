@@ -40,6 +40,13 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./core/components/watchlist/watchlist').then((m) => m.WatchlistComponent),
       },
+      {
+        path: 'performance-tracking',
+        loadComponent: () =>
+          import('./core/components/performance-tracking/performance-tracking').then(
+            (m) => m.PerformanceTrackingComponent,
+          ),
+      },
     ],
   },
 

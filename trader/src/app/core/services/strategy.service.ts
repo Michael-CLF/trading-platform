@@ -1,6 +1,9 @@
 // src/app/services/strategy.service.ts
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, map } from 'rxjs';
+import { BehaviorSubject, Observable, map, firstValueFrom } from 'rxjs';
+import { inject } from '@angular/core';
+import { AlertSystemService } from './alert-system.service';
+import { MarketDataService } from './market-data.service';
 
 export interface MLPrediction {
   symbol: string;
@@ -37,6 +40,8 @@ export class StrategyService {
   private readonly ML_BUY = 0.55;
   private readonly ML_SELL = 0.45;
   private readonly ML_STRONG_SELL = 0.35;
+  private readonly alertSystem = inject(AlertSystemService);
+  private readonly marketData = inject(MarketDataService);
 
   // Store latest signals by symbol
   private mlPredictions = new BehaviorSubject<Map<string, MLPrediction>>(new Map());
@@ -248,6 +253,20 @@ export class StrategyService {
       reason,
       timestamp: new Date(),
     };
+
+    // ADD THIS: Trigger alerts for high confidence signals with actual price
+    if (
+      confidence >= 0.75 &&
+      (action === 'buy' || action === 'strong_buy' || action === 'sell' || action === 'strong_sell')
+    ) {
+      // Fetch current price asynchronously
+      this.marketData.getBars15m(symbol, '1d').subscribe((bars) => {
+        if (bars && bars.length > 0) {
+          const currentPrice = bars[bars.length - 1].c; // Latest close price
+          this.alertSystem.createSignalAlert(symbol, action, confidence, currentPrice);
+        }
+      });
+    }
 
     const signals = this.unifiedSignals.value;
     signals.set(symbol, unified);

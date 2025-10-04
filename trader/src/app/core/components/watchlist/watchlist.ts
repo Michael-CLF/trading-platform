@@ -9,6 +9,7 @@ import { buildFeatures } from '../../shared/utils/features.utils';
 import { makeNext15mLabels } from '../../shared/utils/labeler.utils';
 import { firstValueFrom } from 'rxjs';
 import { ReplacePipe } from '../../shared/pipes/replace.pipe';
+import { PositionTrackerService } from '../../services/position-tracker.service';
 
 interface WatchlistItem {
   symbol: string;
@@ -31,6 +32,7 @@ export class WatchlistComponent implements OnInit, OnDestroy {
   private strategy = inject(StrategyService);
   private market = inject(MarketDataService);
   private predictor = inject(PredictorService);
+  private positionTracker = inject(PositionTrackerService);
 
   // Symbols to monitor
   private readonly SYMBOLS = ['SPY', 'QQQ', 'IWM', 'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN'];
@@ -79,6 +81,12 @@ export class WatchlistComponent implements OnInit, OnDestroy {
       lastUpdate: new Date(),
     }));
     this.watchlistItems.set(initialItems);
+
+    // Subscribe to active positions
+    this.positionTracker.getActivePositions().subscribe((positions) => {
+      const symbols = new Set(Array.from(positions.keys()));
+      this.activePositions.set(symbols);
+    });
 
     // Subscribe to unified signals
     this.signalSub = this.strategy.getAllUnifiedSignals().subscribe((signals) => {
@@ -270,19 +278,34 @@ export class WatchlistComponent implements OnInit, OnDestroy {
     this.updateWatchlistItem(symbol, { loading });
   }
 
-  /**
-   * Toggle position status for a symbol
-   */
   togglePosition(symbol: string): void {
-    const positions = new Set(this.activePositions());
-    if (positions.has(symbol)) {
-      positions.delete(symbol);
-      this.strategy.setPositionStatus(symbol, false);
+    const hasPosition = this.positionTracker.hasPosition(symbol);
+
+    if (hasPosition) {
+      // Close position
+      const currentPrice = this.watchlistItems().find((item) => item.symbol === symbol)?.price || 0;
+      this.positionTracker.closePosition(symbol, currentPrice, 'manual');
     } else {
-      positions.add(symbol);
-      this.strategy.setPositionStatus(symbol, true);
+      // Open position
+      const item = this.watchlistItems().find((i) => i.symbol === symbol);
+      if (
+        item &&
+        item.signal &&
+        (item.signal.action === 'buy' || item.signal.action === 'strong_buy')
+      ) {
+        this.positionTracker.openPosition({
+          symbol,
+          entryPrice: item.price,
+          entryTime: new Date(),
+          quantity: 100, // Default 100 shares
+          side: 'long',
+          stopLoss: item.price * 0.98, // 2% stop loss
+          takeProfit: item.price * 1.03, // 3% take profit
+        });
+      }
     }
-    this.activePositions.set(positions);
+
+    this.strategy.setPositionStatus(symbol, !hasPosition);
   }
 
   /**
