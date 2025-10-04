@@ -1,0 +1,95 @@
+<!-- src/app/components/watchlist/watchlist.html -->
+<div class="watchlist-container">
+    <header class="watchlist-header">
+        <h2>Market Watchlist</h2>
+        <div class="header-info">
+            <span class="update-status" [class.updating]="isUpdating()">
+                <span class="status-dot"></span>
+                {{ isUpdating() ? 'Updating...' : 'Live' }}
+            </span>
+            <span class="last-update" *ngIf="lastGlobalUpdate()">
+                Last: {{ lastGlobalUpdate() | date:'shortTime' }}
+            </span>
+        </div>
+    </header>
+
+    <div class="signal-summary">
+        <div class="summary-card buy-signals">
+            <span class="count">{{ buySignals().length }}</span>
+            <span class="label">Buy Signals</span>
+        </div>
+        <div class="summary-card sell-signals">
+            <span class="count">{{ sellSignals().length }}</span>
+            <span class="label">Sell Signals</span>
+        </div>
+        <div class="summary-card strong-signals">
+            <span class="count">{{ strongSignals().length }}</span>
+            <span class="label">Strong (>75%)</span>
+        </div>
+    </div>
+
+    <div class="watchlist-grid">
+        <div class="watchlist-item" *ngFor="let item of watchlistItems()" [class]="getActionClass(item.signal?.action)"
+            [class.has-position]="activePositions().has(item.symbol)" [class.loading]="item.loading">
+
+            <div class="item-header">
+                <span class="symbol">{{ item.symbol }}</span>
+                <span class="position-indicator" *ngIf="activePositions().has(item.symbol)"
+                    title="Position Active">●</span>
+            </div>
+
+            <div class="price-info">
+                <div class="current-price">${{ item.price | number:'1.2-2' }}</div>
+                <div class="price-change" [class.positive]="item.priceChange > 0"
+                    [class.negative]="item.priceChange < 0">
+                    {{ item.priceChange >= 0 ? '+' : '' }}{{ item.priceChange | number:'1.2-2' }}
+                    ({{ item.priceChangePercent >= 0 ? '+' : '' }}{{ item.priceChangePercent | number:'1.2-2' }}%)
+                </div>
+            </div>
+
+            <div class="signal-info" *ngIf="item.signal">
+                <div class="action-label">
+                    {{ item.signal.action | uppercase | replace:'_':' ' }}
+                </div>
+                <div class="confidence-meter">
+                    <div class="confidence-bar" [style.width]="formatConfidence(item.signal.confidence)"></div>
+                </div>
+                <div class="confidence-text">
+                    {{ formatConfidence(item.signal.confidence) }}
+                </div>
+            </div>
+
+            <div class="signal-details" *ngIf="item.signal">
+                <div class="ml-prob" *ngIf="item.signal.mlProbability !== undefined">
+                    ML: {{ (item.signal.mlProbability * 100) | number:'1.1-1' }}%
+                </div>
+                <div class="tech-signal" *ngIf="item.signal.technicalSignal">
+                    Tech: {{ item.signal.technicalSignal }}
+                </div>
+            </div>
+
+            <div class="no-signal" *ngIf="!item.signal && !item.loading">
+                <span>No Signal</span>
+            </div>
+
+            <div class="loading-indicator" *ngIf="item.loading">
+                <span class="spinner"></span>
+            </div>
+
+            <button class="position-toggle" (click)="togglePosition(item.symbol)"
+                [title]="activePositions().has(item.symbol) ? 'Close Position' : 'Open Position'">
+                {{ activePositions().has(item.symbol) ? '✕' : '+' }}
+            </button>
+        </div>
+    </div>
+
+    <footer class="watchlist-footer">
+        <div class="legend">
+            <span class="legend-item strong-buy">Strong Buy</span>
+            <span class="legend-item buy">Buy</span>
+            <span class="legend-item hold">Hold</span>
+            <span class="legend-item sell">Sell</span>
+            <span class="legend-item strong-sell">Strong Sell</span>
+        </div>
+    </footer>
+</div>

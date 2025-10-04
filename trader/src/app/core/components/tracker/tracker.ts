@@ -6,6 +6,7 @@ import { PredictorService } from '../../services/predictor.service';
 import { MarketDataService } from '../../services/market-data.service';
 import { makeNext15mLabels } from '../../shared/utils/labeler.utils';
 import { buildFeatures } from '../../shared/utils/features.utils';
+import { StrategyService } from '../../services/strategy.service';
 
 @Component({
   selector: 'app-tracker',
@@ -29,6 +30,7 @@ export class Tracker implements OnInit, OnDestroy {
   lastProb = signal<number | null>(null);
   lastUpdated = signal<Date | null>(null);
   errorMsg = signal<string | null>(null);
+  unifiedSignal = signal<any>(null);
 
   suggestion = computed(() => {
     const p = this.lastProb();
@@ -37,10 +39,12 @@ export class Tracker implements OnInit, OnDestroy {
   });
 
   private sub?: Subscription;
+  private strategySub?: Subscription;
 
   constructor(
     private predictor: PredictorService,
     private market: MarketDataService,
+    private strategy: StrategyService,
   ) {}
 
   ngOnInit(): void {
@@ -49,10 +53,19 @@ export class Tracker implements OnInit, OnDestroy {
     this.sub = interval(this.refreshMs)
       .pipe(switchMap(() => this.fetchOnce()))
       .subscribe();
+
+    // Subscribe to unified signals
+    this.strategySub = this.strategy.getUnifiedSignal(this.symbol).subscribe((signal) => {
+      if (signal) {
+        this.unifiedSignal.set(signal);
+        console.log('Unified signal:', signal);
+      }
+    });
   }
 
   ngOnDestroy(): void {
     this.sub?.unsubscribe();
+    this.strategySub?.unsubscribe();
   }
 
   private fetchOnce() {
@@ -81,6 +94,11 @@ export class Tracker implements OnInit, OnDestroy {
         this.lastProb.set(last);
         this.lastUpdated.set(new Date());
         this.loading.set(false);
+
+        // Send ML prediction to strategy service
+        if (last !== null) {
+          this.strategy.updateMLPrediction(this.symbol, last, this.threshold);
+        }
       }),
       catchError((err) => {
         this.errorMsg.set(err?.message ?? 'Prediction failed');

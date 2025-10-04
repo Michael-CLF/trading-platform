@@ -35,6 +35,11 @@ export const routes: Routes = [
         path: 'tracker',
         loadComponent: () => import('./core/components/tracker/tracker').then((m) => m.Tracker),
       },
+      {
+        path: 'watchlist',
+        loadComponent: () =>
+          import('./core/components/watchlist/watchlist').then((m) => m.WatchlistComponent),
+      },
     ],
   },
 
