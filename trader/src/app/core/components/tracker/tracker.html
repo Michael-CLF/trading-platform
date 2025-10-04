@@ -1,45 +1,47 @@
-<div class="tracker">
-    <header class="hdr">
-        <span class="chip">AI</span>
-        <div class="title">{{ symbol }} — AI Trading</div>
-    </header>
+<div class="tracker-container">
+    <div class="tracker">
+        <header class="hdr">
+            <span class="chip">AI</span>
+            <div class="title">{{ symbol }} — AI Trading</div>
+        </header>
 
-    <section class="kv">
-        <div class="row">
-            <div class="label">Threshold</div>
-            <div class="val">{{ threshold | number: '1.2-2' }}</div>
-        </div>
-
-        <div class="meter">
-            <div class="bar" [style.width.%]="(lastProb() ?? 0) * 100"></div>
-            <div class="tick" [style.left.%]="threshold * 100" title="Threshold"></div>
-        </div>
-
-        <div class="row big">
-            <div class="label">Probability</div>
-            <div class="val">
-                <ng-container *ngIf="!loading(); else loadingTpl">
-                    <span [class.good]="(lastProb() ?? 0) >= threshold" [class.bad]="(lastProb() ?? 0) < threshold">
-                        {{ lastProb() == null ? '-' : (lastProb()! | number:'1.3-3') }}
-                    </span>
-                </ng-container>
+        <section class="kv">
+            <div class="row">
+                <div class="label">Threshold</div>
+                <div class="val">{{ threshold | number: '1.2-2' }}</div>
             </div>
-        </div>
 
-        <div class="row">
-            <div class="label">Suggestion</div>
-            <div class="val suggest" [class.buy]="suggestion() === 'BUY'">
-                {{ suggestion() }}
+            <div class="meter">
+                <div class="bar" [style.width.%]="(lastProb() ?? 0) * 100"></div>
+                <div class="tick" [style.left.%]="threshold * 100" title="Threshold"></div>
             </div>
-        </div>
-    </section>
 
-    <footer class="foot">
-        <span *ngIf="lastUpdated() as ts">Updated: {{ ts | date:'shortTime' }}</span>
-        <span class="err" *ngIf="errorMsg() as e">• {{ e }}</span>
-    </footer>
+            <div class="row big">
+                <div class="label">Probability</div>
+                <div class="val">
+                    <ng-container *ngIf="!loading(); else loadingTpl">
+                        <span [class.good]="(lastProb() ?? 0) >= threshold" [class.bad]="(lastProb() ?? 0) < threshold">
+                            {{ lastProb() == null ? '-' : (lastProb()! | number:'1.3-3') }}
+                        </span>
+                    </ng-container>
+                </div>
+            </div>
 
-    <ng-template #loadingTpl>
-        <span class="spinner" aria-label="Loading"></span>
-    </ng-template>
+            <div class="row">
+                <div class="label">Suggestion</div>
+                <div class="val suggest" [class.buy]="suggestion() === 'BUY'">
+                    {{ suggestion() }}
+                </div>
+            </div>
+        </section>
+
+        <footer class="foot">
+            <span *ngIf="lastUpdated() as ts">Updated: {{ ts | date:'shortTime' }}</span>
+            <span class="err" *ngIf="errorMsg() as e">• {{ e }}</span>
+        </footer>
+
+        <ng-template #loadingTpl>
+            <span class="spinner" aria-label="Loading"></span>
+        </ng-template>
+    </div>
 </div>

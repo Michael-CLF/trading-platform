@@ -1,61 +1,61 @@
 <!-- src/app/core/components/dashboard/dashboard.html -->
+<div class="dashboard-container">
+    <h2 class="text-2xl font-semibold mb-4">Dashboard</h2>
 
-<h2 class="text-2xl font-semibold mb-4">Dashboard</h2>
+    <!-- 6 columns on large screens -->
+    <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <div *ngFor="let q of rows()" class="rounded-lg border border-white/10 bg-white/5 p-4">
+            <div class="flex items-center justify-between">
+                <div class="text-sm opacity-70 font-medium">{{ q.symbol }}</div>
+                <div class="text-xs px-2 py-0.5 rounded font-medium" [style.background-color]="badgeBgClass(q)"
+                    [style.color]="badgeClass(q)">
+                    {{ signedPct(q) }}
+                </div>
+            </div>
 
-<!-- 6 columns on large screens -->
-<div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-    <div *ngFor="let q of rows()" class="rounded-lg border border-white/10 bg-white/5 p-4">
-        <div class="flex items-center justify-between">
-            <div class="text-sm opacity-70 font-medium">{{ q.symbol }}</div>
-            <div class="text-xs px-2 py-0.5 rounded font-medium" [style.background-color]="badgeBgClass(q)"
-                [style.color]="badgeClass(q)">
-                {{ signedPct(q) }}
+
+            <div class="mt-2 text-2xl font-semibold">
+                {{ q.price | number:'1.2-2' }}
+                <small class="ml-1 text-sm" [style.color]="deltaClass(q)">
+                    ({{ signedDelta(q) }})
+                </small>
+            </div>
+
+            <div class="mt-1 text-xs opacity-60">
+                {{ q.asOf | date:'yyyy-MM-dd HH:mm' }}
             </div>
         </div>
+    </div>
 
-
-        <div class="mt-2 text-2xl font-semibold">
-            {{ q.price | number:'1.2-2' }}
-            <small class="ml-1 text-sm" [style.color]="deltaClass(q)">
-                ({{ signedDelta(q) }})
-            </small>
+    <!-- Summary: Top gainers / losers -->
+    <div id="win-loss" class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto text-center">
+        <div>
+            <h3 class="mb-2 text-sm uppercase tracking-wide opacity-70">Top gainers (by %)</h3>
+            <ul class="space-y-1 text-left">
+                <li *ngFor="let g of gainers()" class="flex items-baseline gap-2">
+                    <span class="font-mono w-14">{{ g.symbol }}</span>
+                    <span [style.color]="'var(--color-positive)'" class="font-medium">
+                        {{ g.pct | number:'1.1-2' }}%
+                    </span>
+                    <span class="opacity-60">
+                        ( {{ g.delta >= 0 ? '+' : '' }}{{ g.delta | number:'1.2-2' }} )
+                    </span>
+                </li>
+            </ul>
         </div>
 
-        <div class="mt-1 text-xs opacity-60">
-            {{ q.asOf | date:'yyyy-MM-dd HH:mm' }}
+        <div>
+            <h3 class="mb-2 text-sm uppercase tracking-wide opacity-70">Top losers (by %)</h3>
+            <ul class="space-y-1 text-left">
+                <li *ngFor="let l of losers()" class="flex items-baseline gap-2">
+                    <span class="font-mono w-14">{{ l.symbol }}</span>
+                    <span [style.color]="'var(--color-negative-bg)'" class="font-medium">
+                        {{ l.pct | number:'1.1-2' }}%
+                    </span>
+                    <span class="opacity-60">
+                        ( {{ l.delta >= 0 ? '+' : '' }}{{ l.delta | number:'1.2-2' }} )
+                    </span>
+                </li>
+            </ul>
         </div>
     </div>
-</div>
-
-<!-- Summary: Top gainers / losers -->
-<div class="mt-8 grid gap-6 md:grid-cols-2">
-    <div>
-        <h3 class="mb-2 text-sm uppercase tracking-wide opacity-70">Top gainers (by %)</h3>
-        <ul class="space-y-1">
-            <li *ngFor="let g of gainers()" class="flex items-baseline gap-2">
-                <span class="font-mono w-14">{{ g.symbol }}</span>
-                <span [style.color]="'var(--color-positive)'" class="font-medium">
-                    +{{ g.pct | number:'1.1-2' }}%
-                </span>
-                <span class="opacity-60">
-                    ( {{ g.delta >= 0 ? '+' : '' }}{{ g.delta | number:'1.2-2' }} )
-                </span>
-            </li>
-        </ul>
-    </div>
-
-    <div>
-        <h3 class="mb-2 text-sm uppercase tracking-wide opacity-70">Top losers (by %)</h3>
-        <ul class="space-y-1">
-            <li *ngFor="let l of losers()" class="flex items-baseline gap-2">
-                <span class="font-mono w-14">{{ l.symbol }}</span>
-                <span [style.color]="'var(--color-negative-bg)'" class="font-medium">
-                    {{ l.pct | number:'1.1-2' }}%
-                </span>
-                <span class="opacity-60">
-                    ( {{ l.delta >= 0 ? '+' : '' }}{{ l.delta | number:'1.2-2' }} )
-                </span>
-            </li>
-        </ul>
-    </div>
-</div>

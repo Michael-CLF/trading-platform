@@ -1,0 +1,42 @@
+.backtests-container {
+  width: 80%;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr); /* 3 cards across */
+  gap: 16px; /* space between cards */
+  align-items: start;
+}
+
+/* Make all other non-card elements span the full row */
+.backtests-container > :not(.metrics-card) {
+  grid-column: 1 / -1;
+}
+
+.metrics-card {
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    border-color 120ms ease;
+}
+
+#symbol {
+  font-size: 1.5rem;
+}
+
+/* Responsive behavior */
+@media (max-width: 1200px) {
+  .backtests-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .backtests-container {
+    grid-template-columns: 1fr;
+  }
+}
