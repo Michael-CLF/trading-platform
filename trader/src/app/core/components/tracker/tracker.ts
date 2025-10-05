@@ -20,7 +20,7 @@ export class Tracker implements OnInit, OnDestroy {
   @Input() symbol = 'AAPL';
 
   /** Trading threshold used for suggestion line */
-  @Input() threshold = 0.62;
+  @Input() threshold = 0.6;
 
   /** Polling frequency (ms) */
   @Input() refreshMs = 5000;
@@ -35,7 +35,9 @@ export class Tracker implements OnInit, OnDestroy {
   suggestion = computed(() => {
     const p = this.lastProb();
     if (p == null) return '-';
-    return p >= this.threshold ? 'BUY' : 'HOLD/SELL';
+    if (p >= 0.6) return 'BUY'; // Changed from threshold variable
+    if (p <= 0.4) return 'SELL'; // Added sell threshold
+    return 'HOLD'; // More specific than HOLD/SELL
   });
 
   private sub?: Subscription;

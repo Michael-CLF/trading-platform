@@ -5,6 +5,7 @@ import { MarketDataService } from '../../services/market-data.service';
 import { Quote } from '../../shared/models/quote.model';
 import { Observable, forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
+import { TRADING_SYMBOLS } from '../../constants/symbols.constant';
 
 type QuoteRow = Quote & { delta: number; pct: number };
 
@@ -20,37 +21,7 @@ export class Dashboard implements OnInit {
   // DI
   private readonly market = inject(MarketDataService);
   private readonly dec = inject(DecimalPipe);
-
-  // Watchlist (edit as you like)
-  readonly symbols: string[] = [
-    'AAPL',
-    'AMD',
-    'AMZN',
-    'AVGO',
-    'COIN',
-    'CRWD',
-    'GOOGL',
-    'IWM',
-    'MARA',
-    'META',
-    'MSFT',
-    'NET',
-    'NVDA',
-    'PANW',
-    'PLTR',
-    'QQQ',
-    'RIOT',
-    'SHOP',
-    'SPY',
-    'TSLA',
-    'TTD',
-    'UBER',
-    'XLE',
-    'XLF',
-    'XLK',
-    'XLC',
-    'XLY',
-  ];
+  private readonly symbols = TRADING_SYMBOLS;
 
   // UI state
   readonly quotes = signal<Quote[]>([]);

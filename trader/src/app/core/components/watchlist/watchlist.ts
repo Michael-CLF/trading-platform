@@ -10,6 +10,7 @@ import { makeNext15mLabels } from '../../shared/utils/labeler.utils';
 import { firstValueFrom } from 'rxjs';
 import { ReplacePipe } from '../../shared/pipes/replace.pipe';
 import { PositionTrackerService } from '../../services/position-tracker.service';
+import { TRADING_SYMBOLS } from '../../constants/symbols.constant';
 
 interface WatchlistItem {
   symbol: string;
@@ -35,7 +36,7 @@ export class WatchlistComponent implements OnInit, OnDestroy {
   private positionTracker = inject(PositionTrackerService);
 
   // Symbols to monitor
-  private readonly SYMBOLS = ['SPY', 'QQQ', 'IWM', 'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN'];
+  private readonly SYMBOLS = TRADING_SYMBOLS.slice(0, 8); // Show first 8 in watchlist
 
   // Update every 15 minutes, offset by 30 seconds to ensure fresh bars
   private readonly UPDATE_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes

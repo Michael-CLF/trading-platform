@@ -22,6 +22,7 @@ import {
 } from '../../shared/utils/metrics.utils';
 import { BacktestsSettingsService } from '../../services/backtests-settings.service';
 import { PredictorService } from '../../services/predictor.service';
+import { TRADING_SYMBOLS } from '../../constants/symbols.constant';
 
 type SortKey =
   | 'symbol'
@@ -65,38 +66,7 @@ export class BacktestsComponent {
   >([]);
   sweepRows = this._sweepRows.asReadonly();
 
-  private defaultSymbols = [
-    'SPY',
-    'QQQ',
-    'IWM',
-    'AAPL',
-    'MSFT',
-    'NVDA',
-    'AMZN',
-    'GOOGL',
-    'META',
-    'TSLA',
-    'AVGO',
-    'AMD',
-    'SMCI',
-    'COIN',
-    'MARA',
-    'RIOT',
-    'PLTR',
-    'CRWD',
-    'PANW',
-    'SNOW',
-    'NET',
-    'SHOP',
-    'TTD',
-    'UBER',
-    'XLE',
-    'XLF',
-    'XLV',
-    'XLK',
-    'XLC',
-    'XLY',
-  ];
+  private defaultSymbols = TRADING_SYMBOLS;
   private symbols = [...this.defaultSymbols];
 
   private _metricsBySymbol = signal<Record<string, Metrics>>({});
@@ -113,7 +83,8 @@ export class BacktestsComponent {
       this.exitBps = s.exitBps ?? this.exitBps;
       this.longTh = s.longTh ?? this.longTh;
       if (Array.isArray(s.symbols) && s.symbols.length) {
-        this.symbols = s.symbols.slice(0, 64);
+        // Always use the new symbols, ignore saved ones for now
+        this.symbols = [...this.defaultSymbols];
       }
     }
     await this.recompute();
@@ -133,7 +104,7 @@ export class BacktestsComponent {
     this.entryBps = 5;
     this.exitBps = 3;
     this.longTh = 0.62;
-    this.symbols = [...this.defaultSymbols];
+    this.symbols = [...TRADING_SYMBOLS];
     this.onKnobChange();
     await this.recompute();
   }

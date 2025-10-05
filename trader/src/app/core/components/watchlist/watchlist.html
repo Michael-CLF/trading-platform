@@ -61,7 +61,7 @@
 
             <div class="signal-details" *ngIf="item.signal">
                 <div class="ml-prob" *ngIf="item.signal.mlProbability !== undefined">
-                    ML: {{ (item.signal.mlProbability * 100) | number:'1.1-1' }}%
+                    Tech: {{ (item.signal.mlProbability * 100) | number:'1.1-1' }}%
                 </div>
                 <div class="tech-signal" *ngIf="item.signal.technicalSignal">
                     Tech: {{ item.signal.technicalSignal }}

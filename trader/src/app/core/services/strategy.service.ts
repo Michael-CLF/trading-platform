@@ -36,10 +36,11 @@ export interface UnifiedSignal {
 @Injectable({ providedIn: 'root' })
 export class StrategyService {
   // Thresholds for ML predictions
-  private readonly ML_STRONG_BUY = 0.65;
-  private readonly ML_BUY = 0.55;
-  private readonly ML_SELL = 0.45;
-  private readonly ML_STRONG_SELL = 0.35;
+  // Thresholds for technical indicator signals
+  private readonly ML_STRONG_BUY = 0.7; // Was 0.65 - stronger signal needed
+  private readonly ML_BUY = 0.6; // Was 0.55 - matches backend buy threshold
+  private readonly ML_SELL = 0.4; // Was 0.45 - matches backend sell threshold
+  private readonly ML_STRONG_SELL = 0.3; // Was 0.35 - stronger signal needed
   private readonly alertSystem = inject(AlertSystemService);
   private readonly marketData = inject(MarketDataService);
 
@@ -274,8 +275,8 @@ export class StrategyService {
   }
 
   private getMLAction(probability: number): 'buy' | 'sell' | 'hold' {
-    if (probability >= this.ML_BUY) return 'buy';
-    if (probability <= this.ML_SELL) return 'sell';
+    if (probability >= 0.6) return 'buy'; // Changed from 0.55
+    if (probability <= 0.4) return 'sell'; // Changed from 0.45
     return 'hold';
   }
 }
