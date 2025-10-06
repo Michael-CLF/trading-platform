@@ -1,35 +1,18 @@
-<section class="live-candles single-mode">
-    <header class="lc-header">
-        <h1>Live Candles</h1>
-        <div class="lc-sub">15-minute candles (last 60 bars) — select one symbol</div>
-    </header>
+<header class="lc-header">
+    <div class="title">Live Candles</div>
+    <div class="subtitle">15-minute candles (last 60 bars) — select one symbol</div>
 
-    <!-- Symbol checklist (acts like radio in SINGLE_MODE) -->
-    <div class="lc-controls">
-        <div class="symbol-select">
-            <div class="actions">
-                <button type="button" class="small" (click)="clearSelection()">None</button>
-            </div>
-            <div class="checklist">
-                <label *ngFor="let s of symbols">
-                    <input type="checkbox" [checked]="selected().has(s)" (change)="toggleSymbol(s)" />
-                    <span>{{ s }}</span>
-                </label>
-            </div>
-        </div>
+    <div class="toolbar">
+        <button class="pill" (click)="selectNone()">None</button>
+
+        <label class="sym" *ngFor="let s of symbols">
+            <input type="checkbox" [checked]="selected() === s" (change)="toggle(s)" />
+            <span>{{ s }}</span>
+        </label>
     </div>
+</header>
 
-    <!-- Single chart area -->
-    <div class="lc-single" *ngIf="visibleSymbols().length; else pickOne">
-        <div class="lc-row" *ngFor="let sym of visibleSymbols()" [ngClass]="tileClass(sym)">
-            <div class="lc-row-head">
-                <span class="lc-symbol">{{ sym }}</span>
-            </div>
-            <canvas #candleCanvas class="lc-canvas" aria-label="{{ sym }} chart"></canvas>
-        </div>
-    </div>
-
-    <ng-template #pickOne>
-        <div class="empty">Select a symbol above to display the chart.</div>
-    </ng-template>
+<section class="lc-canvas-wrap">
+    <div class="lc-symbol">{{ selected() ?? 'None' }}</div>
+    <canvas #candleCanvas class="lc-canvas"></canvas>
 </section>
