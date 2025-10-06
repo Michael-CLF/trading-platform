@@ -1,30 +1,35 @@
-<section class="live-candles">
+<section class="live-candles single-mode">
     <header class="lc-header">
         <h1>Live Candles</h1>
-        <div class="lc-sub">Auto-updating 15-minute candles (last 60 bars)</div>
+        <div class="lc-sub">15-minute candles (last 60 bars) — select one symbol</div>
     </header>
 
-    <!-- Fallback if no symbols -->
-    <div class="empty" *ngIf="visibleSymbols().length === 0">
-        No symbols to display.
-    </div>
-
-    <!-- Grid of mini charts -->
-    <div class="lc-grid">
-        <div class="lc-tile" *ngFor="let sym of visibleSymbols(); let i = index" [ngClass]="tileClass(sym)">
-            <div class="lc-tile-head">
-                <span class="lc-symbol">{{ sym }}</span>
+    <!-- Symbol checklist (acts like radio in SINGLE_MODE) -->
+    <div class="lc-controls">
+        <div class="symbol-select">
+            <div class="actions">
+                <button type="button" class="small" (click)="clearSelection()">None</button>
             </div>
-
-            <!-- The mini candlestick canvas -->
-            <canvas #candleCanvas class="lc-canvas" aria-label="{{ sym }} mini chart"></canvas>
-
-            <!-- Optional footer: shows latest signal action badge if you style it in SCSS -->
-            <!--
-      <div class="lc-tile-foot" *ngIf="signalMap().get(sym) as s">
-        <span class="badge" [class.strong]="(s.confidence ?? 0) >= 0.75">{{ s.action || '—' }}</span>
-      </div>
-      -->
+            <div class="checklist">
+                <label *ngFor="let s of symbols">
+                    <input type="checkbox" [checked]="selected().has(s)" (change)="toggleSymbol(s)" />
+                    <span>{{ s }}</span>
+                </label>
+            </div>
         </div>
     </div>
+
+    <!-- Single chart area -->
+    <div class="lc-single" *ngIf="visibleSymbols().length; else pickOne">
+        <div class="lc-row" *ngFor="let sym of visibleSymbols()" [ngClass]="tileClass(sym)">
+            <div class="lc-row-head">
+                <span class="lc-symbol">{{ sym }}</span>
+            </div>
+            <canvas #candleCanvas class="lc-canvas" aria-label="{{ sym }} chart"></canvas>
+        </div>
+    </div>
+
+    <ng-template #pickOne>
+        <div class="empty">Select a symbol above to display the chart.</div>
+    </ng-template>
 </section>

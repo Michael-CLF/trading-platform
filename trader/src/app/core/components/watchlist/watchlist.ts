@@ -48,6 +48,7 @@ export class WatchlistComponent implements OnInit, OnDestroy {
   // Symbols to monitor
   private readonly SYMBOLS = TRADING_SYMBOLS; // Show all
   private atrPctBySymbol = new Map<string, number>();
+  private readonly STRONG_CONF = 0.75;
 
   // Update every 15 minutes, offset by 30 seconds to ensure fresh bars
   private readonly UPDATE_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
@@ -62,6 +63,10 @@ export class WatchlistComponent implements OnInit, OnDestroy {
   private updateSub?: Subscription;
   private signalSub?: Subscription;
   private positionsSub?: Subscription;
+
+  private confidenceOf(s?: UnifiedSignal | null): number {
+    return s?.confidence ?? (s as any)?.strength ?? (s as any)?.score ?? 0;
+  }
 
   // Computed values
   buySignals = computed(
@@ -78,15 +83,17 @@ export class WatchlistComponent implements OnInit, OnDestroy {
       ).length,
   );
 
-  strongSignals = computed(() => {
-    // coalesce any confidence-like fields without breaking TS
-    const confidenceOf = (s?: UnifiedSignal | null): number =>
-      s?.confidence ?? (s as any)?.strength ?? (s as any)?.score ?? 0;
-
-    return this.watchlistItems()
-      .filter((item) => confidenceOf(item.signal) > 0.75) // <- use item.signal (not signal2)
-      .sort((a, b) => confidenceOf(b.signal) - confidenceOf(a.signal));
-  });
+  strongCount = computed(
+    () =>
+      this.watchlistItems().filter((item) => {
+        const a = item.signal?.action;
+        const c = this.confidenceOf(item.signal);
+        return (
+          c >= this.STRONG_CONF &&
+          (a === 'buy' || a === 'sell' || a === 'strong_buy' || a === 'strong_sell')
+        );
+      }).length,
+  );
 
   ngOnInit(): void {
     // Initialize watchlist items
@@ -388,11 +395,15 @@ export class WatchlistComponent implements OnInit, OnDestroy {
     this.strategy.setPositionStatus(symbol, !hasPosition);
   }
 
-  /**
-   * Get CSS class for action type
-   */
-  getActionClass(action: string | undefined): string {
-    if (!action) return '';
+  getTileClass(item: WatchlistItem): string {
+    const action = item.signal?.action;
+    const conf = this.confidenceOf(item.signal);
+
+    // upgrade to strong if confidence >= threshold
+    if ((action === 'buy' || action === 'strong_buy') && conf >= this.STRONG_CONF)
+      return 'strong-buy';
+    if ((action === 'sell' || action === 'strong_sell') && conf >= this.STRONG_CONF)
+      return 'strong-sell';
 
     switch (action) {
       case 'strong_buy':

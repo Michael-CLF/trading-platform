@@ -23,15 +23,16 @@
             <span class="label">Sell Signals</span>
         </div>
         <div class="summary-card strong-signals">
-            <span class="count">{{ (strongSignals().length ) }}</span>
+            <span class="count">{{ (strongCount()) }}</span>
             <span class="label">Strong (>75%)</span>
 
         </div>
     </div>
 
     <div class="watchlist-grid">
-        <div class="watchlist-item" *ngFor="let item of watchlistItems()" [class]="getActionClass(item.signal?.action)"
-            [class.has-position]="activePositions().has(item.symbol)" [class.loading]="item.loading">
+        <div class="watchlist-item" *ngFor="let item of watchlistItems()"
+            [class.has-position]="activePositions().has(item.symbol)" [class.loading]="item.loading"
+            [ngClass]="getTileClass(item)">
 
             <div class="item-header">
                 <span class="symbol">{{ item.symbol }}</span>
