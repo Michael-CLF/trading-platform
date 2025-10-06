@@ -53,31 +53,33 @@
                 (click)="onSweepChartClick($event)">
 
                 <!-- axes -->
-                <line [attr.x1]="chartPad" [attr.y1]="chartH - chartPad" [attr.x2]="chartW - chartPad"
+                <line class="side-lines" [attr.x1]="chartPad" [attr.y1]="chartH - chartPad"
+                    [attr.x2]="chartW - chartPad" [attr.y2]="chartH - chartPad" stroke="currentColor"
+                    stroke-width="1" />
+                <line class="side-lines" [attr.x1]="chartPad" [attr.y1]="chartPad" [attr.x2]="chartPad"
                     [attr.y2]="chartH - chartPad" stroke="currentColor" stroke-width="1" />
-                <line [attr.x1]="chartPad" [attr.y1]="chartPad" [attr.x2]="chartPad" [attr.y2]="chartH - chartPad"
-                    stroke="currentColor" stroke-width="1" />
-                <line [attr.x1]="chartW - chartPad" [attr.y1]="chartPad" [attr.x2]="chartW - chartPad"
-                    [attr.y2]="chartH - chartPad" stroke="currentColor" stroke-width="1" />
+                <line class="side-lines" [attr.x1]="chartW - chartPad" [attr.y1]="chartPad"
+                    [attr.x2]="chartW - chartPad" [attr.y2]="chartH - chartPad" stroke="currentColor"
+                    stroke-width="1" />
 
                 <!-- left y ticks (win rate) -->
                 <g *ngFor="let t of sweepChart().yTicksLeft">
-                    <line [attr.x1]="chartPad - 4" [attr.y1]="t.y" [attr.x2]="chartPad" [attr.y2]="t.y"
-                        stroke="currentColor" stroke-width="1" />
-                    <text [attr.x]="chartPad - 8" [attr.y]="t.y + 4" text-anchor="end" font-size="11">{{ t.label
+                    <line class="side-marks" [attr.x1]="chartPad - 4" [attr.y1]="t.y" [attr.x2]="chartPad"
+                        [attr.y2]="t.y" stroke="currentColor" stroke-width="1" />
+                    <text [attr.x]="chartPad - 8" [attr.y]="t.y + 4" text-anchor="end" font-size="12">{{ t.label
                         }}</text>
                 </g>
 
                 <!-- right y ticks (pnl pct) -->
                 <g *ngFor="let t of sweepChart().yTicksRight">
-                    <line [attr.x1]="chartW - chartPad" [attr.y1]="t.y" [attr.x2]="chartW - chartPad + 4"
-                        [attr.y2]="t.y" stroke="currentColor" stroke-width="1" />
+                    <line class="side-marks" [attr.x1]="chartW - chartPad" [attr.y1]="t.y"
+                        [attr.x2]="chartW - chartPad + 4" [attr.y2]="t.y" stroke="currentColor" stroke-width="1" />
                     <text [attr.x]="chartW - chartPad + 8" [attr.y]="t.y + 4" font-size="11">{{ t.label }}</text>
                 </g>
 
                 <!-- x ticks (threshold) -->
                 <g *ngFor="let t of sweepChart().xTicks">
-                    <line [attr.x1]="t.x" [attr.y1]="chartH - chartPad" [attr.x2]="t.x"
+                    <line class="bottom-marks" [attr.x1]="t.x" [attr.y1]="chartH - chartPad" [attr.x2]="t.x"
                         [attr.y2]="chartH - chartPad + 4" stroke="currentColor" stroke-width="1" />
                     <text [attr.x]="t.x" [attr.y]="chartH - chartPad + 16" text-anchor="middle" font-size="11">{{
                         t.label
@@ -85,9 +87,9 @@
                 </g>
 
                 <!-- current threshold marker -->
-                <line [attr.x1]="sweepScale().thToX(longTh)" [attr.y1]="chartPad" [attr.x2]="sweepScale().thToX(longTh)"
-                    [attr.y2]="chartH - chartPad" stroke="currentColor" stroke-dasharray="4 4" stroke-width="1.5"
-                    opacity="0.8" />
+                <line class="mid-line-color" [attr.x1]="sweepScale().thToX(longTh)" [attr.y1]="chartPad"
+                    [attr.x2]="sweepScale().thToX(longTh)" [attr.y2]="chartH - chartPad" stroke="currentColor"
+                    stroke-dasharray="4 4" stroke-width="1.5" opacity="0.8" />
 
                 <!-- points with tooltips (WIN) -->
                 <g *ngFor="let p of sweepChart().points">
@@ -110,18 +112,19 @@
 
                 <!-- points with tooltips -->
                 <g *ngFor="let p of sweepChart().points">
-                    <circle [attr.cx]="p.x" [attr.cy]="p.yWin" r="3" />
+                    <circle class="win-point" [attr.cx]="p.x" [attr.cy]="p.yWin" r="3" />
                     <title>th={{ p.th | number:'1.2-2' }} • win={{ p.win | percent:'1.0-1' }}</title>
                 </g>
                 <g *ngFor="let p of sweepChart().points">
-                    <circle [attr.cx]="p.x" [attr.cy]="p.yPnl" r="3" opacity="0.65" />
+                    <circle class="pnl-point" [attr.cx]="p.x" [attr.cy]="p.yPnl" r="3" opacity="0.65" />
                     <title>th={{ p.th | number:'1.2-2' }} • pnl={{ p.pnl | percent:'1.0-2' }}</title>
                 </g>
 
                 <!-- legend -->
                 <g>
                     <rect [attr.x]="chartPad" [attr.y]="chartPad - 26" width="220" height="20" fill="transparent" />
-                    <text [attr.x]="chartPad" [attr.y]="chartPad - 12" font-size="12">Win rate (left) — Return
+                    <text class="chart-text" [attr.x]="chartPad" [attr.y]="chartPad - 12" font-size="12">Win rate (left)
+                        — Return
                         (right)</text>
                 </g>
             </svg>
@@ -130,7 +133,7 @@
 
 
     <!-- Optional: show sweep results -->
-    <table *ngIf="sweepRows().length" style="width:100%; margin:8px 0 16px 0; border-collapse: collapse;">
+    <table *ngIf="sweepRows().length" style="width:60%; margin:8px 0 16px 0; border-collapse: collapse;">
         <thead>
             <tr>
                 <th style="text-align:left;">Threshold</th>
@@ -148,23 +151,8 @@
             </tr>
         </tbody>
     </table>
-    <div class="bt-controls" style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
-        <label>
-            Entry cost (bps)
-            <input type="number" min="0" step="1" [(ngModel)]="entryBps"
-                style="width: 80px;margin-left: 6px;color: black;border-radius: 4px;padding: 4px 8px;">
-        </label>
 
-        <label>
-            Exit cost (bps)
-            <input type="number" min="0" step="1" [(ngModel)]="exitBps"
-                style="width: 80px;margin-left: 6px;color: black;border-radius: 4px;padding: 4px 8px;">
-        </label>
-
-        <button (click)="recompute()" [disabled]="loading()">Run backtest</button>
-    </div>
-    <button class="px-3 py-1 rounded border border-gray-600 hover:bg-gray-700 ml-2" (click)="resetBacktestSettings()"
-        [disabled]="loading()">
+    <button id="defaults" class="test" (click)="resetBacktestSettings()" [disabled]="loading()">
         Reset defaults
     </button>
 
@@ -242,23 +230,6 @@
             </tbody>
 
         </table>
-        <label>
-            Entry cost (bps)
-            <input type="number" min="0" step="1" [(ngModel)]="entryBps" (ngModelChange)="onKnobChange()"
-                style="width: 80px;margin-left: 6px;color: black;border-radius: 4px;padding: 4px 8px;">
-        </label>
-
-        <label>
-            Exit cost (bps)
-            <input type="number" min="0" step="1" [(ngModel)]="exitBps" (ngModelChange)="onKnobChange()"
-                style="width: 80px;margin-left: 6px;color: black;border-radius: 4px;padding: 4px 8px;">
-        </label>
-
-        <label>
-            Entry threshold (Pr↑)
-            <input type="number" min="0.5" max="0.9" step="0.01" [(ngModel)]="longTh" (ngModelChange)="onKnobChange()"
-                style="width: 80px;margin-left: 6px;color: black;border-radius: 4px;padding: 4px 8px;">
-        </label>
 
         <div *ngIf="!loading() && !rows().length" class="opacity-70">
             No results for this window.

@@ -36,7 +36,7 @@ export class WatchlistComponent implements OnInit, OnDestroy {
   private positionTracker = inject(PositionTrackerService);
 
   // Symbols to monitor
-  private readonly SYMBOLS = TRADING_SYMBOLS.slice(0, 8); // Show first 8 in watchlist
+  private readonly SYMBOLS = TRADING_SYMBOLS; // Show first 8 in watchlist
 
   // Update every 15 minutes, offset by 30 seconds to ensure fresh bars
   private readonly UPDATE_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes

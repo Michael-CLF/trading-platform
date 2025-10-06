@@ -27,7 +27,47 @@
 #symbol {
   font-size: 1.5rem;
 }
-
+.mid-line-color {
+  color: greenyellow;
+}
+.bottom-marks {
+  color: greenyellow;
+}
+.side-marks {
+  color: greenyellow;
+}
+.side-lines {
+  color: greenyellow;
+}
+.side-text {
+  color: greenyellow;
+}
+.chart-text {
+  color: greenyellow;
+}
+svg path:first-of-type {
+  stroke: greenyellow; /* example: green */
+}
+svg path:nth-of-type(2) {
+  stroke: #7b1fa2; /* example: blue */
+}
+svg text {
+  fill: #fff; /* or whatever light color you want */
+}
+.win-point {
+  fill: #c00000; /* green */
+}
+.pnl-point {
+  fill: greenyellow; /* purple or any color you prefer */
+  opacity: 0.95;
+}
+#defaults {
+  width: 30%;
+  margin: 0 auto;
+  border: 1px solid greenyellow;
+  border-radius: 4px;
+  padding: 8px 16px;
+}
 /* Responsive behavior */
 @media (max-width: 1200px) {
   .backtests-container {
