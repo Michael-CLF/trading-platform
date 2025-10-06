@@ -64,11 +64,15 @@ export class WatchlistComponent implements OnInit, OnDestroy {
     ),
   );
 
-  strongSignals = computed(() =>
-    this.watchlistItems()
-      .filter((item) => item.signal && item.signal.confidence > 0.75)
-      .sort((a, b) => (b.signal?.confidence || 0) - (a.signal?.confidence || 0)),
-  );
+  strongSignals = computed(() => {
+    // coalesce any confidence-like fields without breaking TS
+    const confidenceOf = (s?: UnifiedSignal | null): number =>
+      s?.confidence ?? (s as any)?.strength ?? (s as any)?.score ?? 0;
+
+    return this.watchlistItems()
+      .filter((item) => confidenceOf(item.signal) > 0.75) // <- use item.signal (not signal2)
+      .sort((a, b) => confidenceOf(b.signal) - confidenceOf(a.signal));
+  });
 
   ngOnInit(): void {
     // Initialize watchlist items
