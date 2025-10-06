@@ -37,10 +37,10 @@ export interface UnifiedSignal {
 export class StrategyService {
   // Thresholds for ML predictions
   // Thresholds for technical indicator signals
-  private readonly ML_STRONG_BUY = 0.7; // Was 0.65 - stronger signal needed
-  private readonly ML_BUY = 0.6; // Was 0.55 - matches backend buy threshold
-  private readonly ML_SELL = 0.4; // Was 0.45 - matches backend sell threshold
-  private readonly ML_STRONG_SELL = 0.3; // Was 0.35 - stronger signal needed
+  private readonly ML_STRONG_BUY = 0.58;
+  private readonly ML_BUY = 0.52;
+  private readonly ML_SELL = 0.48;
+  private readonly ML_STRONG_SELL = 0.42;
   private readonly alertSystem = inject(AlertSystemService);
   private readonly marketData = inject(MarketDataService);
 

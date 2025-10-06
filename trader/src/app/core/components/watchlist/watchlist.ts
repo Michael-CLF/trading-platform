@@ -1,7 +1,16 @@
 // src/app/components/watchlist/watchlist.ts
 import { Component, OnInit, OnDestroy, signal, computed, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { Subscription, interval, timer } from 'rxjs';
+import {
+  Subscription,
+  of,
+  switchMap,
+  interval,
+  map,
+  catchError,
+  finalize,
+  timeout,
+  timer,
+} from 'rxjs';
 import { StrategyService, UnifiedSignal } from '../../services/strategy.service';
 import { MarketDataService } from '../../services/market-data.service';
 import { PredictorService } from '../../services/predictor.service';
@@ -11,6 +20,7 @@ import { firstValueFrom } from 'rxjs';
 import { ReplacePipe } from '../../shared/pipes/replace.pipe';
 import { PositionTrackerService } from '../../services/position-tracker.service';
 import { TRADING_SYMBOLS } from '../../constants/symbols.constant';
+import { CommonModule } from '@angular/common';
 
 interface WatchlistItem {
   symbol: string;
@@ -36,7 +46,8 @@ export class WatchlistComponent implements OnInit, OnDestroy {
   private positionTracker = inject(PositionTrackerService);
 
   // Symbols to monitor
-  private readonly SYMBOLS = TRADING_SYMBOLS; // Show first 8 in watchlist
+  private readonly SYMBOLS = TRADING_SYMBOLS; // Show all
+  private atrPctBySymbol = new Map<string, number>();
 
   // Update every 15 minutes, offset by 30 seconds to ensure fresh bars
   private readonly UPDATE_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
@@ -50,18 +61,21 @@ export class WatchlistComponent implements OnInit, OnDestroy {
 
   private updateSub?: Subscription;
   private signalSub?: Subscription;
+  private positionsSub?: Subscription;
 
   // Computed values
-  buySignals = computed(() =>
-    this.watchlistItems().filter(
-      (item) => item.signal?.action === 'strong_buy' || item.signal?.action === 'buy',
-    ),
+  buySignals = computed(
+    () =>
+      this.watchlistItems().filter(
+        (i) => i.signal?.action === 'strong_buy' || i.signal?.action === 'buy',
+      ).length,
   );
 
-  sellSignals = computed(() =>
-    this.watchlistItems().filter(
-      (item) => item.signal?.action === 'strong_sell' || item.signal?.action === 'sell',
-    ),
+  sellSignals = computed(
+    () =>
+      this.watchlistItems().filter(
+        (i) => i.signal?.action === 'strong_sell' || i.signal?.action === 'sell',
+      ).length,
   );
 
   strongSignals = computed(() => {
@@ -86,13 +100,9 @@ export class WatchlistComponent implements OnInit, OnDestroy {
       lastUpdate: new Date(),
     }));
     this.watchlistItems.set(initialItems);
-
-    // Subscribe to active positions
-    this.positionTracker.getActivePositions().subscribe((positions) => {
-      const symbols = new Set(Array.from(positions.keys()));
-      this.activePositions.set(symbols);
-    });
-
+    for (const s of this.SYMBOLS) {
+      this.loadAtrPct(s);
+    }
     // Subscribe to unified signals
     this.signalSub = this.strategy.getAllUnifiedSignals().subscribe((signals) => {
       this.updateSignalsInWatchlist(signals);
@@ -105,11 +115,17 @@ export class WatchlistComponent implements OnInit, OnDestroy {
     this.updateSub = timer(this.INITIAL_DELAY_MS, this.UPDATE_INTERVAL_MS).subscribe(() =>
       this.updateAllSymbols(),
     );
+
+    this.positionsSub = this.positionTracker.getActivePositions().subscribe((positions) => {
+      const symbols = new Set(Array.from(positions.keys()));
+      this.activePositions.set(symbols);
+    });
   }
 
   ngOnDestroy(): void {
     this.updateSub?.unsubscribe();
     this.signalSub?.unsubscribe();
+    this.positionsSub?.unsubscribe();
   }
 
   /**
@@ -128,7 +144,52 @@ export class WatchlistComponent implements OnInit, OnDestroy {
     // Add 30 seconds offset for data availability
     const totalMs = (delayMinutes * 60 + 30 - seconds) * 1000 - milliseconds;
 
-    return totalMs > 0 ? totalMs : 30000; // Minimum 30 seconds
+    const periodMs = 15 * 60 * 1000;
+    return totalMs > 0 ? totalMs : totalMs + periodMs; // roll to the next 15-min slot + 30s
+  }
+  /** Load a lightweight ATR% from 5d of 15m bars; caches into atrPctBySymbol */
+  private loadAtrPct(symbol: string): void {
+    // Avoid reloading if we already have it
+    if (this.atrPctBySymbol.has(symbol)) return;
+
+    this.market
+      .getBars15m(symbol, '5d')
+      .pipe(
+        timeout(8000),
+        map((bars: any[]) => {
+          if (!Array.isArray(bars) || bars.length < 15) return null;
+
+          // Simple ATR(14) approximation on 15m bars
+          // trueRange = max(high-low, abs(high-prevClose), abs(low-prevClose))
+          let prevClose = bars[0].c ?? bars[0].close;
+          const trs: number[] = [];
+          for (let i = 1; i < bars.length; i++) {
+            const b = bars[i];
+            const high = b.h ?? b.high;
+            const low = b.l ?? b.low;
+            const close = b.c ?? b.close;
+            const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+            trs.push(tr);
+            prevClose = close;
+          }
+          if (!trs.length) return null;
+
+          // ATR ~ EMA; use simple mean for robustness
+          const atr = trs.slice(-14).reduce((a, x) => a + x, 0) / Math.min(14, trs.length);
+
+          // Convert to percentage of last close
+          const lastClose = prevClose;
+          if (!lastClose || !isFinite(atr) || atr <= 0) return null;
+
+          const atrPct = atr / lastClose; // e.g., 0.018 => 1.8%
+          return Math.max(0.0025, Math.min(0.08, atrPct)); // clamp ~0.25%..8%
+        }),
+        catchError(() => of(null)),
+        finalize(() => void 0),
+      )
+      .subscribe((pct) => {
+        if (pct != null) this.atrPctBySymbol.set(symbol, pct);
+      });
   }
 
   /**
@@ -138,9 +199,8 @@ export class WatchlistComponent implements OnInit, OnDestroy {
     this.isUpdating.set(true);
     console.log('Updating watchlist at', new Date().toLocaleTimeString());
 
-    for (const symbol of this.SYMBOLS) {
-      await this.updateSymbol(symbol);
-    }
+    // Run symbol updates in parallel instead of sequentially
+    await Promise.all(this.SYMBOLS.map((s) => this.updateSymbol(s)));
 
     this.lastGlobalUpdate.set(new Date());
     this.isUpdating.set(false);
@@ -191,7 +251,7 @@ export class WatchlistComponent implements OnInit, OnDestroy {
 
         if (response?.probs?.length > 0) {
           const probability = response.probs[response.probs.length - 1];
-          this.strategy.updateMLPrediction(symbol, probability);
+          this.strategy.updateMLPrediction(symbol, probability, 0.6);
         }
       }
 
@@ -208,7 +268,23 @@ export class WatchlistComponent implements OnInit, OnDestroy {
       this.updateItemLoading(symbol, false);
     }
   }
+  private computeEvPct(symbol: string, confidence: number | undefined): number | null {
+    if (confidence == null) return null;
+    const atrPct = this.atrPctBySymbol.get(symbol) ?? 0.02; // ~2% fallback if not loaded
+    const avgGain = 1.2 * atrPct; // assume winners stretch a bit above ATR
+    const avgLoss = 0.8 * atrPct; // assume losers cut a bit sooner than ATR
+    const p = Math.min(Math.max(confidence, 0), 1);
+    return p * avgGain - (1 - p) * avgLoss; // could be negative
+  }
 
+  /** EV in dollars for a given stake (default $50) */
+  public expectedValueUSD(item: WatchlistItem, stake = 50): number | null {
+    const evPct = this.computeEvPct(
+      item.symbol,
+      item.signal?.confidence ?? (item.signal as any)?.strength ?? (item.signal as any)?.score,
+    );
+    return evPct == null ? null : stake * evPct;
+  }
   /**
    * Calculate SMA signal for technical analysis
    */
@@ -271,11 +347,10 @@ export class WatchlistComponent implements OnInit, OnDestroy {
    * Update individual watchlist item
    */
   private updateWatchlistItem(symbol: string, updates: Partial<WatchlistItem>): void {
-    const items = this.watchlistItems();
-    const updated = items.map((item) => (item.symbol === symbol ? { ...item, ...updates } : item));
-    this.watchlistItems.set(updated);
+    this.watchlistItems.update((items) =>
+      items.map((item) => (item.symbol === symbol ? { ...item, ...updates } : item)),
+    );
   }
-
   /**
    * Update loading state for symbol
    */

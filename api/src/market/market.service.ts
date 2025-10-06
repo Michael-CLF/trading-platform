@@ -38,6 +38,34 @@ export class MarketService {
     return data;
   }
 
+  async getRealTimeQuote(symbol: string) {
+    const cacheKey = `realtime:${symbol}`;
+    const ttl = this.config.get<number>('CACHE_TTL_REALTIME') ?? 5; // Very short TTL for real-time
+
+    const hit = await this.cache.get(cacheKey);
+    if (hit) return hit;
+
+    const data = await this.fetchRealTimeQuotePolygon(symbol);
+    await this.cache.set(cacheKey, data, ttl);
+    return data;
+  }
+
+  async getRealTimeQuotes(symbols: string[]) {
+    const cacheKey = `realtime:batch:${symbols.sort().join(',')}`;
+    const ttl = this.config.get<number>('CACHE_TTL_REALTIME') ?? 5;
+
+    const hit = await this.cache.get(cacheKey);
+    if (hit) return hit;
+
+    const data = await Promise.all(
+      symbols.map((symbol) => this.fetchRealTimeQuotePolygon(symbol)),
+    );
+    const filtered = data.filter((q) => q !== null);
+
+    await this.cache.set(cacheKey, filtered, ttl);
+    return filtered;
+  }
+
   async getBars(
     symbol: string,
     interval: BarsInterval,
@@ -56,6 +84,39 @@ export class MarketService {
   }
 
   /* ---------------------------- Polygon fetch --------------------------- */
+
+  private async fetchRealTimeQuotePolygon(symbol: string) {
+    // Use last trade endpoint for most recent real-time price
+    const url =
+      `${this.polygonBase}/v2/last/trade/${symbol}?` +
+      qs.stringify({ apiKey: this.polygonKey });
+
+    try {
+      const r = await this.safeGet<any>(url);
+
+      if (!r?.results) {
+        console.warn(`No real-time data available for ${symbol}`);
+        return null;
+      }
+
+      const result = r.results;
+      const out = {
+        symbol,
+        price: result.p ?? null,
+        size: result.s ?? null,
+        timestamp: result.t ? new Date(result.t / 1000000).toISOString() : null, // Polygon uses nanoseconds
+        exchange: result.x ?? null,
+        conditions: result.c ?? [],
+        provider: 'polygon',
+      };
+
+      console.log(`[realtime] ${symbol} -> ${out.price} @ ${out.timestamp}`);
+      return out;
+    } catch (error) {
+      console.error(`Failed to fetch real-time quote for ${symbol}:`, error);
+      return null;
+    }
+  }
 
   private async fetchQuotePolygon(symbol: string) {
     // Use snapshot endpoint for real-time data during market hours

@@ -15,15 +15,15 @@
 
     <div class="signal-summary">
         <div class="summary-card buy-signals">
-            <span class="count">{{ buySignals().length }}</span>
+            <span class="count">{{ buySignals() }}</span>
             <span class="label">Buy Signals</span>
         </div>
         <div class="summary-card sell-signals">
-            <span class="count">{{ sellSignals().length }}</span>
+            <span class="count">{{ sellSignals() }}</span>
             <span class="label">Sell Signals</span>
         </div>
         <div class="summary-card strong-signals">
-            <span class="count">{{ strongSignals().length }}</span>
+            <span class="count">{{ strongSignals() }}</span>
             <span class="label">Strong (>75%)</span>
         </div>
     </div>
@@ -58,6 +58,22 @@
                     {{ formatConfidence(item.signal.confidence) }}
                 </div>
             </div>
+
+            <!-- Expected Value (shows on BUY/SELL with any confidence) -->
+            <div *ngIf="item.signal?.action as act">
+                <ng-container *ngIf="expectedValueUSD(item) as ev">
+                    <div style="margin-top:4px; font-size:0.9rem; opacity:.85;">
+                        Expected ({{ act }}):
+                        <b [style.color]="ev >= 0 ? '#53d769' : '#ff3b30'">
+                            {{ ev | currency:'USD':'symbol':'1.0-2' }}
+                        </b>
+                        <span style="opacity:.7">
+                            (stake $50)
+                        </span>
+                    </div>
+                </ng-container>
+            </div>
+
 
             <div class="signal-details" *ngIf="item.signal">
                 <div class="ml-prob" *ngIf="item.signal.mlProbability !== undefined">
