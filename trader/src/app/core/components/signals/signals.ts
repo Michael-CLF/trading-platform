@@ -1,126 +1,225 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  OnDestroy,
+  AfterViewInit,
+  ViewChildren,
+  ElementRef,
+  QueryList,
+  signal,
+  computed,
+  inject,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { firstValueFrom } from 'rxjs';
-import { MarketDataService, UiBar } from '../../services/market-data.service';
-import { StrategyService } from '../../services/strategy.service';
+import { timer, Subscription, firstValueFrom, timeout, of, catchError } from 'rxjs';
 
-export type SignalAction = 'buy' | 'sell';
-export interface SignalRow {
-  symbol: string;
-  action: SignalAction;
-  price: number;
-  timestamp: string;
-  reason?: string;
-  confidence?: number;
-}
+import { MarketDataService } from '../../services/market-data.service';
+import { StrategyService, UnifiedSignal } from '../../services/strategy.service';
+import { TRADING_SYMBOLS } from '../../constants/symbols.constant';
+
+type Bar = { t: number; o: number; h: number; l: number; c: number };
 
 @Component({
-  selector: 'app-signals',
+  selector: 'app-signals', // keep the route/component name
   standalone: true,
-  imports: [CommonModule, FormsModule],
-  templateUrl: './signals.html',
-  styleUrls: ['./signals.scss'],
+  imports: [CommonModule],
+  templateUrl: './signals.html', // we'll send this next
+  styleUrls: ['./signals.scss'], // and this after
 })
-export class SignalsComponent {
+export class SignalsComponent implements OnInit, OnDestroy, AfterViewInit {
   private market = inject(MarketDataService);
   private strategy = inject(StrategyService);
 
-  loading = signal(true);
-  query = signal<string>('');
-  action = signal<SignalAction | ''>('');
-  rows = signal<SignalRow[]>([]);
+  /** Symbols to render (use your constant list) */
+  readonly symbols = TRADING_SYMBOLS;
 
-  private readonly symbols = ['AAPL', 'MSFT', 'NVDA', 'SPY', 'QQQ', 'IWM', 'GOOGL', 'AMZN'];
+  /** Bars per symbol (ring buffer of last N candles) */
+  private readonly MAX_BARS = 60;
+  barsMap = signal(new Map<string, Bar[]>());
 
-  async ngOnInit() {
-    this.loading.set(true);
-    const out: SignalRow[] = [];
+  /** Optional: latest unified signal per symbol for tile outlines */
+  signalMap = signal(new Map<string, UnifiedSignal>());
 
-    for (const s of this.symbols) {
-      const bars = await firstValueFrom(
-        this.market.getBarsForUi(s, '15m', '5d', 'America/New_York'),
-      );
-      if (bars.length < 30) continue;
+  /** Grid sizing */
+  tileWidth = 260;
+  tileHeight = 120;
 
-      // Calculate SMA signal
-      const sig = this.computeSmaSignal(s, bars, 5, 20);
-      if (sig) {
-        out.push(sig);
+  /** Schedule (align to 15-minute close + 30s) */
+  private readonly UPDATE_INTERVAL_MS = 15 * 60 * 1000;
+  private readonly INITIAL_DELAY_MS = this.calculateInitialDelay();
+  private updateSub?: Subscription;
+  private signalSub?: Subscription;
 
-        // Send technical signal to strategy service
-        const technicalSignal = sig.action === 'buy' ? 'buy' : 'sell';
-        const strength = sig.confidence || 0.6;
-        this.strategy.updateTechnicalIndicator(s, 'sma_cross', technicalSignal, strength);
-      }
-    }
+  /** Canvas refs for each tile */
+  @ViewChildren('candleCanvas') canvases!: QueryList<ElementRef<HTMLCanvasElement>>;
 
-    this.rows.set(out);
-    this.loading.set(false);
+  /** Derived: list used for rendering order */
+  visibleSymbols = computed(() => this.symbols);
 
-    // Subscribe to unified signals for monitoring
-    this.strategy.getAllUnifiedSignals().subscribe((signals) => {
-      console.log('All unified signals:', signals);
-      // You could update the UI here to show combined signals
+  ngOnInit(): void {
+    // Seed with empty arrays so template can render immediately
+    const seed = new Map<string, Bar[]>();
+    for (const s of this.symbols) seed.set(s, []);
+    this.barsMap.set(seed);
+
+    // Initial pull
+    this.refreshAll().then(() => this.renderAll());
+
+    // Align to 15m cadence (next boundary + 30s)
+    this.updateSub = timer(this.INITIAL_DELAY_MS, this.UPDATE_INTERVAL_MS).subscribe(() => {
+      this.refreshAll().then(() => this.renderAll());
+    });
+
+    // Optional: subscribe to unified signals to style tile borders
+    this.signalSub = this.strategy.getAllUnifiedSignals().subscribe((list) => {
+      const map = new Map<string, UnifiedSignal>();
+      for (const s of list) map.set(s.symbol, s);
+      this.signalMap.set(map);
     });
   }
 
-  onQueryChange(v: string) {
-    this.query.set(v ?? '');
+  ngAfterViewInit(): void {
+    // Initial draw once canvases exist
+    queueMicrotask(() => this.renderAll());
   }
 
-  onActionChange(v: '' | SignalAction) {
-    this.action.set(v ?? '');
+  ngOnDestroy(): void {
+    this.updateSub?.unsubscribe();
+    this.signalSub?.unsubscribe();
   }
 
-  filtered = computed(() => {
-    const q = this.query().trim().toUpperCase();
-    const a = this.action();
-    return this.rows().filter(
-      (row) => (q ? row.symbol.toUpperCase().includes(q) : true) && (a ? row.action === a : true),
+  /** Pull last 5d of 15m bars for all symbols (parallel) and keep last MAX_BARS */
+  private async refreshAll(): Promise<void> {
+    const map = new Map(this.barsMap());
+    await Promise.all(
+      this.symbols.map(async (symbol) => {
+        const raw = await firstValueFrom(
+          this.market.getBars15m(symbol, '5d').pipe(
+            timeout(8000),
+            catchError(() => of([] as any[])),
+          ),
+        );
+
+        const bars: Bar[] = (raw as any[]).map((b) => ({
+          t: b.t ?? b.time ?? b.timestamp ?? Date.now(),
+          o: b.o ?? b.open,
+          h: b.h ?? b.high,
+          l: b.l ?? b.low,
+          c: b.c ?? b.close,
+        }));
+
+        // keep only the last MAX_BARS
+        map.set(symbol, bars.slice(-this.MAX_BARS));
+      }),
     );
-  });
-
-  private sma(closes: number[], n: number, i: number): number {
-    if (i + 1 < n) return NaN;
-    let sum = 0;
-    for (let k = i - n + 1; k <= i; k++) sum += closes[k];
-    return sum / n;
+    this.barsMap.set(map);
   }
 
-  private computeSmaSignal(symbol: string, bars: UiBar[], fast = 5, slow = 20): SignalRow | null {
-    const closes = bars.map((b) => b.close);
-    const i = closes.length - 1;
-    const fNow = this.sma(closes, fast, i);
-    const sNow = this.sma(closes, slow, i);
-    const fPrev = this.sma(closes, fast, i - 1);
-    const sPrev = this.sma(closes, slow, i - 1);
-
-    if (![fNow, sNow, fPrev, sPrev].every(isFinite)) return null;
-
-    let action: SignalAction | null = null;
-    let confidence = 0.6;
-
-    if (fPrev <= sPrev && fNow > sNow) {
-      action = 'buy';
-      // Calculate confidence based on crossover strength
-      const crossStrength = (fNow - sNow) / sNow;
-      confidence = Math.min(0.9, 0.6 + crossStrength * 2);
-    } else if (fPrev >= sPrev && fNow < sNow) {
-      action = 'sell';
-      const crossStrength = (sNow - fNow) / sNow;
-      confidence = Math.min(0.9, 0.6 + crossStrength * 2);
+  /** Draw all canvases based on current bars */
+  renderAll(): void {
+    const order = this.visibleSymbols();
+    const refs = this.canvases?.toArray() ?? [];
+    for (let i = 0; i < order.length && i < refs.length; i++) {
+      const symbol = order[i];
+      const el = refs[i]?.nativeElement;
+      if (el) this.drawMiniCandles(el, this.barsMap().get(symbol) ?? []);
     }
+  }
 
-    if (!action) return null;
+  /** Candlestick renderer (canvas) */
+  private drawMiniCandles(canvas: HTMLCanvasElement, bars: Bar[]): void {
+    const w = (canvas.width = this.tileWidth); // set width/height on each draw to clear
+    const h = (canvas.height = this.tileHeight);
 
-    return {
-      symbol,
-      action,
-      price: bars[i].close,
-      timestamp: bars[i].time,
-      reason: `${fast}/${slow} SMA cross`,
-      confidence,
+    const ctx = canvas.getContext('2d');
+    if (!ctx || bars.length === 0) return;
+
+    // Find range
+    let min = Number.POSITIVE_INFINITY;
+    let max = Number.NEGATIVE_INFINITY;
+    for (const b of bars) {
+      if (b.l < min) min = b.l;
+      if (b.h > max) max = b.h;
+    }
+    if (!isFinite(min) || !isFinite(max) || max <= min) return;
+
+    const toY = (price: number) => {
+      const p = (price - min) / (max - min);
+      return h - p * (h - 8) - 4; // 4px vertical padding
     };
+
+    // Layout
+    const n = bars.length;
+    const gap = 1; // 1px gap between candles
+    const slot = (w - 8) / n; // horizontal slot per bar
+    const body = Math.max(1, Math.floor(slot - gap)); // body width
+
+    // Baseline (first close)
+    ctx.globalAlpha = 0.15;
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.beginPath();
+    const baseY = toY(bars[0].c);
+    ctx.moveTo(0, baseY);
+    ctx.lineTo(w, baseY);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Candles
+    for (let i = 0; i < n; i++) {
+      const b = bars[i];
+      const x = 4 + i * slot + (slot - body) / 2;
+
+      const openY = toY(b.o);
+      const closeY = toY(b.c);
+      const highY = toY(b.h);
+      const lowY = toY(b.l);
+
+      const up = b.c >= b.o;
+      ctx.strokeStyle = up ? '#22c55e' : '#ef4444';
+      ctx.fillStyle = up ? '#22c55e' : '#ef4444';
+
+      // wick
+      ctx.beginPath();
+      ctx.moveTo(x + body / 2, highY);
+      ctx.lineTo(x + body / 2, lowY);
+      ctx.stroke();
+
+      // body
+      const top = Math.min(openY, closeY);
+      const height = Math.max(1, Math.abs(closeY - openY));
+      ctx.fillRect(x, top, body, height);
+    }
+  }
+
+  /** Next 15-minute boundary + 30 seconds (ms) */
+  private calculateInitialDelay(): number {
+    const now = new Date();
+    const minutes = now.getMinutes();
+    const seconds = now.getSeconds();
+    const millis = now.getMilliseconds();
+
+    const minutesToNext15 = 15 - (minutes % 15);
+    const delayMin = minutesToNext15 === 15 ? 0 : minutesToNext15;
+    const totalMs = (delayMin * 60 + 30 - seconds) * 1000 - millis;
+    const periodMs = 15 * 60 * 1000;
+    return totalMs > 0 ? totalMs : totalMs + periodMs;
+  }
+
+  /** helper to read a tile's class from its unified signal (optional styling) */
+  tileClass(sym: string): string {
+    const s = this.signalMap().get(sym);
+    if (!s?.action) return '';
+    switch (s.action) {
+      case 'strong_buy':
+        return 'strong-buy';
+      case 'buy':
+        return 'buy';
+      case 'strong_sell':
+        return 'strong-sell';
+      case 'sell':
+        return 'sell';
+      default:
+        return 'hold';
+    }
   }
 }

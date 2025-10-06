@@ -1,4 +1,132 @@
-.signals-container {
-  width: 80%;
-  margin: 0 auto;
+/* Container */
+.live-candles {
+  padding: 16px 20px;
+
+  .lc-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 14px;
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 0;
+    }
+    .lc-sub {
+      opacity: 0.7;
+      font-size: 0.9rem;
+    }
+  }
+}
+
+/* Grid */
+.lc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+/* Tile */
+.lc-tile {
+  background: rgba(15, 23, 42, 0.55); /* slate-900/55 on dark */
+  border: 1px solid rgba(148, 163, 184, 0.25); /* slate-400/25 */
+  border-radius: 12px;
+  padding: 10px 12px 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.06s ease-in-out;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  }
+}
+
+/* Tile header */
+.lc-tile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+
+  .lc-symbol {
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+}
+
+/* Canvas (mini chart) */
+.lc-canvas {
+  display: block;
+  width: 100%;
+  height: 120px; /* match tileHeight in TS for crisp pixels */
+  border-radius: 8px;
+}
+
+/* Optional footer (if enabled in HTML) */
+.lc-tile-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+
+  .badge {
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    background: rgba(148, 163, 184, 0.18);
+    border: 1px solid rgba(148, 163, 184, 0.28);
+
+    &.strong {
+      background: rgba(34, 197, 94, 0.16);
+      border-color: rgba(34, 197, 94, 0.45);
+    }
+  }
+}
+
+/* Status borders (optional, driven by tileClass(sym)) */
+.lc-tile.strong-buy {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25);
+}
+.lc-tile.buy {
+  border-color: #86efac;
+  box-shadow: 0 0 0 1px rgba(134, 239, 172, 0.25);
+}
+.lc-tile.sell {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.25);
+}
+.lc-tile.strong-sell {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+}
+.lc-tile.hold {
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+/* Empty state */
+.empty {
+  opacity: 0.7;
+  padding: 12px 0;
+}
+
+/* Responsive tweaks */
+@media (max-width: 900px) {
+  .lc-grid {
+    gap: 12px;
+  }
+  .lc-canvas {
+    height: 110px;
+  }
+}
+@media (max-width: 640px) {
+  .lc-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+  .lc-canvas {
+    height: 100px;
+  }
 }
