@@ -5,41 +5,40 @@
     <div class="toolbar">
         <button class="pill" (click)="selectNone()">None</button>
 
+        <!-- Single-select: radios hidden, pill spans styled; click drives selection -->
         <label class="sym" *ngFor="let s of symbols" (click)="toggle(s)">
-            <input type="checkbox" [checked]="selected() === s" />
-            <span>{{ s }}</span>
+            <input type="radio" name="symbol" class="sr-only" [checked]="selected() === s" aria-label="{{ s }}" />
+            <span [class.active]="selected() === s">{{ s }}</span>
         </label>
     </div>
 </header>
 
 <section class="lc-canvas-wrap">
-    <!-- FEATURE 7: Info Panel -->
-    @if (chartInfo(); as info) {
-    <div class="chart-info-panel">
-        <div class="info-symbol">{{ info.symbol }}</div>
-        <div class="info-price" [class.positive]="info.priceChange >= 0" [class.negative]="info.priceChange < 0">
-            ${{ info.currentPrice.toFixed(2) }}
-            <span class="price-change">
-                {{ info.priceChange >= 0 ? '+' : '' }}{{ info.priceChange.toFixed(2) }}
-                ({{ info.priceChangePercent >= 0 ? '+' : '' }}{{ info.priceChangePercent.toFixed(2) }}%)
-            </span>
-        </div>
-        <div class="info-stats">
-            <div class="stat">
-                <span class="stat-label">High</span>
-                <span class="stat-value">${{ info.high.toFixed(2) }}</span>
+    <div class="chart-info-panel" *ngIf="chartInfo() as info">
+        <div class="chart-info-panel">
+            <div class="info-symbol">{{ info.symbol }}</div>
+            <div class="info-price" [class.positive]="info.priceChange >= 0" [class.negative]="info.priceChange < 0">
+                ${{ info.currentPrice.toFixed(2) }}
+                <span class="price-change">
+                    {{ info.priceChange >= 0 ? '+' : '' }}{{ info.priceChange.toFixed(2) }}
+                    ({{ info.priceChangePercent >= 0 ? '+' : '' }}{{ info.priceChangePercent.toFixed(2) }}%)
+                </span>
             </div>
-            <div class="stat">
-                <span class="stat-label">Low</span>
-                <span class="stat-value">${{ info.low.toFixed(2) }}</span>
-            </div>
-            <div class="stat">
-                <span class="stat-label">Open</span>
-                <span class="stat-value">${{ info.open.toFixed(2) }}</span>
+            <div class="info-stats">
+                <div class="stat">
+                    <span class="stat-label">High</span>
+                    <span class="stat-value">${{ info.high.toFixed(2) }}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Low</span>
+                    <span class="stat-value">${{ info.low.toFixed(2) }}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Open</span>
+                    <span class="stat-value">${{ info.open.toFixed(2) }}</span>
+                </div>
             </div>
         </div>
     </div>
-    }
-
     <canvas #candleCanvas class="lc-canvas"></canvas>
 </section>

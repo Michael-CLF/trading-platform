@@ -10,13 +10,16 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Subscription } from 'rxjs';
+import { Subscription, firstValueFrom, of, timeout, catchError, timer } from 'rxjs';
 
-import { LiveCandlesStore, Bar } from '../../services/live-candles.store';
 import { TRADING_SYMBOLS } from '../../constants/symbols.constant';
 import { StrategyService, UnifiedSignal } from '../../services/strategy.service';
+import { MarketDataService } from '../../services/market-data.service';
 
-/** Signal type for buy/sell indicators */
+/** Bar type */
+type Bar = { t: number; o: number; h: number; l: number; c: number };
+
+/** Buy/Sell badge for the canvas */
 interface TradeSignal {
   barIndex: number;
   type: 'BUY' | 'SELL';
@@ -25,10 +28,7 @@ interface TradeSignal {
   confidence: number;
 }
 
-/** Timeframe options */
-type Timeframe = '15m' | '1h' | '1d';
-
-/** Chart info for display */
+/** Info panel */
 interface ChartInfo {
   symbol: string;
   currentPrice: number;
@@ -48,59 +48,56 @@ interface ChartInfo {
   styleUrls: ['./signals.scss'],
 })
 export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
-  private store = inject(LiveCandlesStore);
+  private market = inject(MarketDataService);
   private strategy = inject(StrategyService);
 
-  /** list of symbols to show as toggles */
+  /** toolbar symbols */
   readonly symbols = TRADING_SYMBOLS;
 
-  /** single selection */
+  /** single selection for the current template */
   selected = signal<string | null>(null);
 
-  /** selected timeframe */
-  selectedTimeframe = signal<Timeframe>('15m');
-
-  /** chart info for display */
+  /** chart info signal (used by the info panel block in the template) */
   chartInfo = signal<ChartInfo | null>(null);
 
-  /** canvas ref */
+  /** canvas */
   @ViewChild('candleCanvas', { static: false }) canvasRef!: ElementRef<HTMLCanvasElement>;
 
-  /** latest bars for selected symbol */
-  private sub?: Subscription;
-  private strategySub?: Subscription;
+  /** data + subs */
   private bars: Bar[] = [];
   private currentSignal: UnifiedSignal | null | undefined = null;
-
-  /** detected trade signals */
   private signals: TradeSignal[] = [];
+  private refreshSub?: Subscription;
+  private strategySub?: Subscription;
 
-  /** simple badge text */
+  /** header text helper */
   headerText = computed(() => this.selected() ?? 'None');
 
+  /** polling cadence for live updates (15m bars) */
+  private readonly UPDATE_MS = 60_000; // light 1-min poll; bar boundary alignment handled in service
+
   ngOnInit(): void {
-    // default: select nothing; user clicks a symbol
+    // nothing selected initially
   }
 
   ngAfterViewInit(): void {
-    console.log('AfterViewInit - canvas ref:', this.canvasRef?.nativeElement);
-    // if a symbol is preselected, subscribe after view init
     const sym = this.selected();
-    if (sym) this.startStream(sym);
+    if (sym) {
+      this.start(sym);
+    }
   }
 
   ngOnDestroy(): void {
-    this.sub?.unsubscribe();
-    this.strategySub?.unsubscribe();
+    this.teardown();
   }
 
-  // --------- UI actions ---------
+  /** ---------------- UI actions ---------------- */
 
   selectNone(): void {
-    this.sub?.unsubscribe();
-    this.sub = undefined;
+    this.teardown();
     this.selected.set(null);
     this.clearCanvas();
+    this.chartInfo.set(null);
   }
 
   toggle(sym: string): void {
@@ -109,54 +106,96 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
       this.selectNone();
       return;
     }
-    this.selected.set(sym);
-    console.log('Toggled to:', sym, 'Canvas:', this.canvasRef?.nativeElement);
 
-    // Subscribe to strategy signals for this symbol
+    // single select
+    this.selected.set(sym);
+
+    // rewire strategy subscription for badges
     this.strategySub?.unsubscribe();
-    this.strategySub = this.strategy.getUnifiedSignal(sym).subscribe((signal) => {
-      this.currentSignal = signal;
-      // Recalculate signals when strategy updates
-      if (this.bars.length > 0) {
+    this.strategySub = this.strategy.getUnifiedSignal(sym).subscribe((sig) => {
+      this.currentSignal = sig;
+      if (this.bars.length) {
         this.signals = this.detectSignals(this.bars);
         this.drawFullSession(this.canvasRef?.nativeElement, this.bars);
       }
     });
 
-    this.startStream(sym);
+    this.start(sym);
   }
 
-  // --------- streaming + render ---------
+  /** ---------------- data lifecycle ---------------- */
 
-  private startStream(sym: string): void {
-    this.sub?.unsubscribe();
-    console.log('Starting stream for:', sym);
-    this.sub = this.store.stream(sym).subscribe({
-      next: (bars) => {
-        console.log('Received bars:', bars?.length, bars);
-        this.bars = bars ?? [];
+  private start(sym: string): void {
+    this.teardown(); // clear prior polling
+
+    // initial fetch immediately
+    this.fetchBars(sym).then((bars) => {
+      this.bars = bars;
+      this.updateChartInfo();
+      this.signals = this.detectSignals(this.bars);
+      this.drawFullSession(this.canvasRef?.nativeElement, this.bars);
+    });
+
+    // light polling to keep the last bar fresh
+    this.refreshSub = timer(this.UPDATE_MS, this.UPDATE_MS).subscribe(() => {
+      const s = this.selected();
+      if (!s) return;
+      this.fetchBars(s).then((bars) => {
+        this.bars = bars;
         this.updateChartInfo();
         this.signals = this.detectSignals(this.bars);
         this.drawFullSession(this.canvasRef?.nativeElement, this.bars);
-      },
-      error: (err) => {
-        console.error('Stream error:', err);
-      },
+      });
     });
   }
 
-  /**
-   * Update chart info display with current data
-   */
+  private teardown(): void {
+    this.refreshSub?.unsubscribe();
+    this.refreshSub = undefined;
+    this.strategySub?.unsubscribe();
+    this.strategySub = undefined;
+  }
+
+  private async fetchBars(symbol: string): Promise<Bar[]> {
+    // Pull the same way your “working yesterday” file did
+    const raw = await firstValueFrom(
+      this.market.getBars15m(symbol, '5d').pipe(
+        timeout(8000),
+        catchError(() => of([] as any[])),
+      ),
+    );
+
+    const bars: Bar[] = (raw as any[]).map((b) => ({
+      t: b.t ?? b.time ?? b.timestamp ?? Date.now(),
+      o: b.o ?? b.open,
+      h: b.h ?? b.high,
+      l: b.l ?? b.low,
+      c: b.c ?? b.close,
+    }));
+
+    // Keep a tidy window (60 bars) just like before
+    return bars.filter(isBarValid).slice(-60);
+
+    function isBarValid(x: Bar): x is Bar {
+      return (
+        typeof x.t === 'number' &&
+        isFinite(x.t) &&
+        [x.o, x.h, x.l, x.c].every((n) => typeof n === 'number' && isFinite(n))
+      );
+    }
+  }
+
+  /** ---------------- info panel ---------------- */
+
   private updateChartInfo(): void {
     if (this.bars.length === 0 || !this.selected()) return;
 
     const last = this.bars[this.bars.length - 1];
     const first = this.bars[0];
+
     const high = Math.max(...this.bars.map((b) => b.h));
     const low = Math.min(...this.bars.map((b) => b.l));
-    // Volume might not be available in Bar type, so safely access it
-    const volume = this.bars.reduce((sum, b) => sum + ((b as any).v || 0), 0);
+    const volume = 0; // not provided on 15m route in your old flow
 
     this.chartInfo.set({
       symbol: this.selected()!,
@@ -170,98 +209,77 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
-  /**
-   * Detect buy/sell signals using the same logic as watchlist
-   * Uses SMA crossover strategy from your StrategyService
-   * Only shows signals with >= 75% confidence (strong signals only)
-   */
+  /** ---------------- signal detection (SMA 5/20) ---------------- */
+
   private detectSignals(bars: Bar[]): TradeSignal[] {
     if (bars.length < 20) return [];
 
-    const signals: TradeSignal[] = [];
     const closes = bars.map((b) => b.c);
     const fast = 5;
     const slow = 20;
 
-    const sma = (period: number, index: number): number => {
-      if (index + 1 < period) return NaN;
+    const sma = (period: number, i: number): number => {
+      if (i + 1 < period) return NaN;
       let sum = 0;
-      for (let i = index - period + 1; i <= index; i++) {
-        sum += closes[i];
-      }
+      for (let k = i - period + 1; k <= i; k++) sum += closes[k];
       return sum / period;
     };
 
-    // Check each bar for crossover signals
+    const out: TradeSignal[] = [];
     for (let i = slow; i < bars.length; i++) {
-      const sma5Now = sma(fast, i);
-      const sma20Now = sma(slow, i);
-      const sma5Prev = sma(fast, i - 1);
-      const sma20Prev = sma(slow, i - 1);
+      const s5 = sma(fast, i);
+      const s20 = sma(slow, i);
+      const s5p = sma(fast, i - 1);
+      const s20p = sma(slow, i - 1);
+      if (![s5, s20, s5p, s20p].every(Number.isFinite)) continue;
 
-      if (
-        !isFinite(sma5Now) ||
-        !isFinite(sma20Now) ||
-        !isFinite(sma5Prev) ||
-        !isFinite(sma20Prev)
-      ) {
-        continue;
-      }
-
-      // Bullish crossover: SMA5 crosses above SMA20
-      if (sma5Prev <= sma20Prev && sma5Now > sma20Now) {
-        const strength = Math.min(0.9, 0.6 + ((sma5Now - sma20Now) / sma20Now) * 10);
-
-        signals.push({
+      // Bullish crossover
+      if (s5p <= s20p && s5 > s20) {
+        const conf = Math.min(0.9, 0.6 + ((s5 - s20) / s20) * 10);
+        out.push({
           barIndex: i,
           type: 'BUY',
           price: bars[i].c,
-          reason: strength >= 0.75 ? 'Strong Buy Signal' : 'Buy Signal',
-          confidence: strength,
+          reason: conf >= 0.75 ? 'Strong Buy Signal' : 'Buy Signal',
+          confidence: conf,
         });
       }
-
-      // Bearish crossover: SMA5 crosses below SMA20
-      if (sma5Prev >= sma20Prev && sma5Now < sma20Now) {
-        const strength = Math.min(0.9, 0.6 + ((sma20Now - sma5Now) / sma20Now) * 10);
-
-        signals.push({
+      // Bearish crossover
+      if (s5p >= s20p && s5 < s20) {
+        const conf = Math.min(0.9, 0.6 + ((s20 - s5) / s20) * 10);
+        out.push({
           barIndex: i,
           type: 'SELL',
           price: bars[i].c,
-          reason: strength >= 0.75 ? 'Strong Sell Signal' : 'Sell Signal',
-          confidence: strength,
+          reason: conf >= 0.75 ? 'Strong Sell Signal' : 'Sell Signal',
+          confidence: conf,
         });
       }
     }
 
-    // FEATURE 6: Only show strong signals (>= 0.75 confidence)
-    return signals.filter((s) => s.confidence >= 0.75);
+    return out.filter((s) => s.confidence >= 0.75);
   }
 
-  /** Draw today's session if available; else last ~26 bars.
-   *  Includes: Y-axis price scale, current price line, volume bars, better spacing
-   */
+  /** ---------------- canvas drawing (unchanged layout, sturdier fallbacks) ---------------- */
+
   private drawFullSession(canvas: HTMLCanvasElement | undefined, allBars: Bar[]): void {
     if (!canvas) return;
 
-    // FEATURE 1: Increased left padding for Y-axis price scale
+    // Price scale width for left axis
     const PRICE_SCALE_WIDTH = 60;
 
-    // size canvas to full width and tall viewport
+    // Size canvas to container width + tall viewport height
     const parentW = canvas.parentElement?.getBoundingClientRect().width ?? window.innerWidth - 40;
     const w = (canvas.width = Math.max(320, Math.floor(parentW)));
     const h = (canvas.height = Math.max(420, Math.floor(window.innerHeight * 0.7)));
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      return;
-    }
+    if (!ctx) return;
     ctx.clearRect(0, 0, w, h);
 
     if (!allBars?.length) return;
 
-    // ----- prefer today's regular session if present
+    // Try to render today's regular session; if not enough bars, fall back to last ~26 bars
     const last = allBars[allBars.length - 1];
     const day = new Date(last.t);
     day.setHours(0, 0, 0, 0);
@@ -269,19 +287,19 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
     start.setHours(9, 30, 0, 0);
     const end = new Date(day);
     end.setHours(16, 0, 0, 0);
-    const startMs = start.getTime(),
-      endMs = end.getTime();
+
+    const startMs = start.getTime();
+    const endMs = end.getTime();
 
     let bars = allBars.filter((b) => b.t >= startMs && b.t <= endMs);
-
-    // Fallback: last ~1 day of 15m bars if we didn't capture the session (after-hours, holidays, API quirk)
     if (bars.length < 10) {
+      // Market closed: draw last day's worth of 15m bars
       const PER_DAY_15M = 26;
       bars = allBars.slice(-PER_DAY_15M);
     }
     if (bars.length === 0) return;
 
-    // ----- robust Y range: winsorize 2%..98% so outliers don't compress the chart
+    // Winsorized Y range for stability
     const lows = bars
       .map((b) => b.l)
       .filter(Number.isFinite)
@@ -293,19 +311,17 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
 
     let ymin = this.quantile(lows, 0.02);
     let ymax = this.quantile(highs, 0.98);
-
-    // if for any reason the quantiles collapsed, fallback to plain min/max
     if (!(isFinite(ymin) && isFinite(ymax)) || ymax <= ymin) {
       ymin = Math.min(...lows);
       ymax = Math.max(...highs);
     }
     if (!(isFinite(ymin) && isFinite(ymax)) || ymax <= ymin) return;
 
-    // ----- layout helpers with space for Y-axis
+    // Layout
     const leftPad = PRICE_SCALE_WIDTH + 8;
     const rightPad = 8;
     const bottomPad = 22;
-    const topPad = 30; // FEATURE 3: More space at top for SELL badges
+    const topPad = 30;
     const usableW = w - leftPad - rightPad;
     const step = usableW / bars.length;
     const bodyW = Math.max(2, Math.floor(step * 0.6));
@@ -315,16 +331,16 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
       return h - bottomPad - a * (h - topPad - bottomPad);
     };
 
-    // FEATURE 1: Draw Y-axis price scale
+    // Y-axis price scale
     this.drawPriceScale(ctx, ymin, ymax, toY, leftPad, topPad, bottomPad, h);
 
-    // FEATURE 2: Draw current price line
+    // Current price dashed line
     if (bars.length > 0) {
       const currentPrice = bars[bars.length - 1].c;
       this.drawCurrentPriceLine(ctx, currentPrice, toY, leftPad, w, rightPad);
     }
 
-    // ----- baseline from first bar's open (purely cosmetic)
+    // Baseline (first bar’s open)
     ctx.save();
     ctx.globalAlpha = 0.14;
     ctx.strokeStyle = '#cbd5e1';
@@ -334,7 +350,7 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
     ctx.stroke();
     ctx.restore();
 
-    // ----- vertical grid + time labels with AM/PM (FEATURE 4)
+    // Vertical grid + time labels
     ctx.save();
     ctx.globalAlpha = 0.26;
     ctx.strokeStyle = 'rgba(148,163,184,.28)';
@@ -343,28 +359,26 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
 
-    const labelEvery = 2; // ~30 minutes for 15m bars
+    const labelEvery = 2; // ~30 minutes at 15m bars
     for (let i = 0; i < bars.length; i++) {
       const xMid = leftPad + i * step + step / 2;
-      // grid line
       ctx.beginPath();
       ctx.moveTo(xMid, topPad);
       ctx.lineTo(xMid, h - bottomPad - 2);
       ctx.stroke();
 
       if (i % labelEvery === 0) {
-        // FEATURE 4: Add AM/PM to time labels
         const lab = new Date(bars[i].t).toLocaleTimeString([], {
           hour: '2-digit',
           minute: '2-digit',
-          hour12: true, // This adds AM/PM
+          hour12: true,
         });
         ctx.fillText(lab, xMid, h - 2);
       }
     }
     ctx.restore();
 
-    // ----- candles (index-based positioning)
+    // Candles
     for (let i = 0; i < bars.length; i++) {
       const b = bars[i];
       const x0 = leftPad + i * step + (step - bodyW) / 2;
@@ -391,13 +405,10 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
       ctx.fillRect(x0, top, bodyW, height);
     }
 
-    // ----- Draw buy/sell signal badges
+    // Buy/Sell badges
     this.drawSignals(ctx, bars, leftPad, step, bodyW, toY, topPad, bottomPad, h);
   }
 
-  /**
-   * FEATURE 1: Draw Y-axis price scale on the left side
-   */
   private drawPriceScale(
     ctx: CanvasRenderingContext2D,
     ymin: number,
@@ -415,44 +426,29 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
 
-    // Calculate nice price intervals
-    const priceRange = ymax - ymin;
+    const range = ymax - ymin;
     const numTicks = 8;
-    const rawStep = priceRange / numTicks;
+    const rawStep = range / numTicks;
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const norm = rawStep / mag;
+    let step: number;
+    if (norm < 1.5) step = 1 * mag;
+    else if (norm < 3) step = 2 * mag;
+    else if (norm < 7) step = 5 * mag;
+    else step = 10 * mag;
 
-    // Round to nice numbers
-    const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
-    const normalizedStep = rawStep / magnitude;
-    let niceStep: number;
-
-    if (normalizedStep < 1.5) niceStep = 1 * magnitude;
-    else if (normalizedStep < 3) niceStep = 2 * magnitude;
-    else if (normalizedStep < 7) niceStep = 5 * magnitude;
-    else niceStep = 10 * magnitude;
-
-    // Draw price levels
-    const startPrice = Math.ceil(ymin / niceStep) * niceStep;
-
-    for (let price = startPrice; price <= ymax; price += niceStep) {
+    const startPrice = Math.ceil(ymin / step) * step;
+    for (let price = startPrice; price <= ymax; price += step) {
       const y = toY(price);
-
-      // Horizontal grid line
       ctx.beginPath();
       ctx.moveTo(leftPad, y);
       ctx.lineTo(leftPad - 5, y);
       ctx.stroke();
-
-      // Price label
-      const label = price.toFixed(2);
-      ctx.fillText(label, leftPad - 8, y);
+      ctx.fillText(price.toFixed(2), leftPad - 8, y);
     }
-
     ctx.restore();
   }
 
-  /**
-   * FEATURE 2: Draw current price line across the chart
-   */
   private drawCurrentPriceLine(
     ctx: CanvasRenderingContext2D,
     price: number,
@@ -462,7 +458,6 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
     rightPad: number,
   ): void {
     const y = toY(price);
-
     ctx.save();
     ctx.strokeStyle = '#3b82f6';
     ctx.lineWidth = 1.5;
@@ -473,26 +468,26 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
     ctx.lineTo(w - rightPad, y);
     ctx.stroke();
 
-    // Price badge on the right
-    const labelText = price.toFixed(2);
+    // badge
+    const label = price.toFixed(2);
     ctx.font = 'bold 11px ui-sans-serif, system-ui, -apple-system';
-    const textWidth = ctx.measureText(labelText).width;
-    const badgeWidth = textWidth + 12;
-    const badgeHeight = 18;
-    const badgeX = w - rightPad - badgeWidth;
-    const badgeY = y - badgeHeight / 2;
+    const tw = ctx.measureText(label).width;
+    const bw = tw + 12;
+    const bh = 18;
+    const bx = w - rightPad - bw;
+    const by = y - bh / 2;
 
     ctx.fillStyle = '#3b82f6';
     ctx.setLineDash([]);
-    ctx.fillRect(badgeX, badgeY, badgeWidth, badgeHeight);
+    ctx.fillRect(bx, by, bw, bh);
 
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(labelText, badgeX + badgeWidth / 2, y);
-
+    ctx.fillText(label, bx + bw / 2, y);
     ctx.restore();
   }
+
   private drawSignals(
     ctx: CanvasRenderingContext2D,
     bars: Bar[],
@@ -504,50 +499,53 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
     bottomPad: number,
     h: number,
   ): void {
-    for (const signal of this.signals) {
-      if (signal.barIndex >= bars.length) continue;
+    for (const s of this.signals) {
+      if (s.barIndex >= bars.length) continue;
+      const bar = bars[s.barIndex];
+      const i = s.barIndex;
 
-      const bar = bars[signal.barIndex];
-      const i = signal.barIndex;
-
-      // Calculate x position using index-based positioning (same as candles)
       const x = leftPad + i * step + step / 2;
-      const y = signal.type === 'BUY' ? h - bottomPad + 15 : topPad - 5;
+      const chartHeight = h - topPad - bottomPad;
+      const y =
+        s.type === 'BUY'
+          ? h - bottomPad - chartHeight * 0.15 // 15% up from bottom
+          : topPad + chartHeight * 0.15; // 15% down from top
 
-      // Badge styling - stronger signals get brighter colors
-      const isStrong = signal.confidence >= 0.75;
-      const badgeWidth = isStrong ? 40 : 35;
-      const badgeHeight = 18;
-      const badgeX = x - badgeWidth / 2;
-      const badgeY = y - badgeHeight / 2;
+      const isStrong = s.confidence >= 0.75;
+      const bw = isStrong ? 40 : 35;
+      const bh = 18;
+      const bx = x - bw / 2;
+      const by = y - bh / 2;
 
-      // Badge background with opacity based on confidence
       ctx.save();
-      const baseColor = signal.type === 'BUY' ? '#22c55e' : '#ef4444';
-      ctx.fillStyle = baseColor;
-      ctx.globalAlpha = 0.85 + (signal.confidence - 0.6) * 0.4; // 0.85-1.0 opacity
-      ctx.beginPath();
-      ctx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 3);
+      const base = s.type === 'BUY' ? '#22c55e' : '#ef4444';
+      ctx.fillStyle = base;
+      ctx.globalAlpha = 0.85 + (s.confidence - 0.6) * 0.4;
+      (ctx as any).roundRect?.(bx, by, bw, bh, 3);
+      // Fallback if roundRect is not supported
+      if (!(ctx as any).roundRect) {
+        ctx.beginPath();
+        ctx.rect(bx, by, bw, bh);
+      }
       ctx.fill();
 
-      // Badge text
       ctx.globalAlpha = 1;
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = '#fff';
       ctx.font = isStrong
         ? 'bold 11px ui-sans-serif, system-ui, -apple-system'
         : '11px ui-sans-serif, system-ui, -apple-system';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(signal.type, x, y);
+      ctx.fillText(s.type, x, y);
 
-      // Draw line connecting badge to candle
-      ctx.strokeStyle = baseColor;
+      // connector
+      ctx.strokeStyle = base;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([2, 2]);
       ctx.globalAlpha = 0.7;
       ctx.beginPath();
-      const candleY = signal.type === 'BUY' ? toY(bar.l) : toY(bar.h);
-      ctx.moveTo(x, badgeY + (signal.type === 'BUY' ? -badgeHeight / 2 : badgeHeight / 2));
+      const candleY = s.type === 'BUY' ? toY(bar.l) : toY(bar.h);
+      ctx.moveTo(x, by + (s.type === 'BUY' ? -bh / 2 : bh / 2));
       ctx.lineTo(x, candleY);
       ctx.stroke();
       ctx.setLineDash([]);
@@ -563,12 +561,12 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
     ctx.clearRect(0, 0, el.width, el.height);
   }
 
-  /** Simple quantile (0..1) for sorted numeric arrays; clamps if empty. */
+  /** quantile helper */
   private quantile(sorted: number[], q: number): number {
     if (!sorted.length) return NaN;
     const idx = Math.min(sorted.length - 1, Math.max(0, (sorted.length - 1) * q));
-    const lo = Math.floor(idx),
-      hi = Math.ceil(idx);
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
     if (lo === hi) return sorted[lo];
     const w = idx - lo;
     return sorted[lo] * (1 - w) + sorted[hi] * w;

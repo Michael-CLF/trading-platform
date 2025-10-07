@@ -15,45 +15,42 @@
     font-size: 0.9rem;
     grid-column: 1 / -1;
   }
-  .toolbar {
-    grid-column: 1 / -1;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    align-items: center;
-  }
 
-  .pill {
-    padding: 0.25rem 0.6rem;
-    border-radius: 9999px;
-    border: 1px solid rgba(148, 163, 184, 0.28);
-    background: transparent;
-    cursor: pointer;
-  }
+  /* keep everything else exactly the same */
 
-  label.sym {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.25rem 0.6rem;
-    border-radius: 9999px;
-    border: 1px solid rgba(148, 163, 184, 0.28);
-    cursor: pointer;
+  .lc-header {
+    /* …existing rules… */
 
-    input {
-      accent-color: #86efac;
+    label.sym {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border-radius: 9999px;
+      border: 0;
+
+      span {
+        font-size: 1rem;
+      }
     }
-    span {
-      font-size: 0.9rem;
-    }
+  }
+  .sym:hover > span {
+    background-color: greenyellow;
+    color: #000000;
+  }
+  .sym:active > span {
+    background-color: red;
+    color: #000000;
   }
 }
 
 .lc-canvas-wrap {
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  position: relative;
+  border: 1px solid greenyellow;
   border-radius: 0.6rem;
   padding: 0.5rem;
   background: rgba(2, 6, 23, 0.35);
+  width: 95%;
+  margin: 0 auto;
 }
 
 .lc-symbol {
@@ -65,6 +62,7 @@
 .lc-canvas {
   display: block;
 }
+
 .chart-info-panel {
   position: absolute;
   top: 0.75rem;
@@ -90,11 +88,11 @@
     margin-bottom: 0.5rem;
 
     &.positive {
-      color: #22c55e;
+      color: greenyellow;
     }
 
     &.negative {
-      color: #ef4444;
+      color: #c00000;
     }
 
     .price-change {
@@ -133,10 +131,57 @@
   }
 }
 
-.lc-canvas-wrap {
+/*.lc-canvas-wrap {
   position: relative; // Important for absolute positioning of info panel
   border: 1px solid rgba(148, 163, 184, 0.28);
   border-radius: 0.6rem;
   padding: 0.5rem;
   background: rgba(2, 6, 23, 0.35);
+}*/
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0 auto;
+  margin-bottom: 20px;
+  margin-top: 20px;
+}
+.pill {
+  background: transparent;
+  color: #ffffff;
+}
+.pill:hover {
+  background-color: greenyellow;
+}
+
+.sym {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.sym > span {
+  display: inline-block;
+  padding: 5px 14px;
+  border: 1px solid greenyellow;
+  border-radius: 9999px;
+  color: #e5e7eb;
+  opacity: 0.95;
+}
+.sym > span.active {
+  background: greenyellow; /* green like your up candles */
+  color: #fff;
+  border-color: transparent;
 }

@@ -1,33 +1,24 @@
 // src/app/core/constants/symbols.constant.ts
 
 export const TRADING_SYMBOLS = [
-  // Crypto-related (highest volatility)
-  'COIN', // Coinbase - crypto exchange
-  'MARA', // Marathon Digital - Bitcoin miner
-  'RIOT', // Riot Platforms - Bitcoin miner
-  'MSTR', // MicroStrategy - Bitcoin holder
-
-  // AI/Tech momentum plays
-  'NVDA', // NVIDIA - AI leader
-  'SMCI', // Super Micro Computer - AI infrastructure
-  'PLTR', // Palantir - AI/data analytics
-  'ARM', // ARM Holdings - AI chips
-
-  // High-growth tech
-  'TSLA', // Tesla - volatile EV leader
-  'AVGO', // Broadcom - semiconductors
-  'AMD', // AMD - chips, high volatility
-  'SOFI', // SoFi - fintech, very volatile
-
-  // Software/Cloud (good intraday moves)
-  'SNOW', // Snowflake - cloud data
-  'CRWD', // CrowdStrike - cybersecurity
-  'NET', // Cloudflare - edge computing
-  'DDOG', // Datadog - monitoring
-
-  // Recent IPOs/High beta
-  'HOOD', // Robinhood - retail trading
-  'RBLX', // Roblox - gaming platform
-  'U', // Unity Software - game engine
   'AFRM', // Affirm - buy now pay later
+  'AMD', // AMD - chips, high volatility
+  'ARM', // ARM Holdings - AI chips
+  'AVGO', // Broadcom - semiconductors
+  'COIN', // Coinbase - crypto exchange
+  'CRWD', // CrowdStrike - cybersecurity
+  'DDOG', // Datadog - monitoring
+  'HOOD', // Robinhood - retail trading
+  'MARA', // Marathon Digital - Bitcoin miner
+  'MSTR', // MicroStrategy - Bitcoin holder
+  'NET', // Cloudflare - edge computing
+  'NVDA', // NVIDIA - AI leader
+  'PLTR', // Palantir - AI/data analytics
+  'RBLX', // Roblox - gaming platform
+  'RIOT', // Riot Platforms - Bitcoin miner
+  'SMCI', // Super Micro Computer - AI infrastructure
+  'SNOW', // Snowflake - cloud data
+  'SOFI', // SoFi - fintech, very volatile
+  'TSLA', // Tesla - volatile EV leader
+  'U', // Unity Software - game engine
 ];
