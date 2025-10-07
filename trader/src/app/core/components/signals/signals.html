@@ -14,31 +14,32 @@
 </header>
 
 <section class="lc-canvas-wrap">
-    <div class="chart-info-panel" *ngIf="chartInfo() as info">
-        <div class="chart-info-panel">
-            <div class="info-symbol">{{ info.symbol }}</div>
-            <div class="info-price" [class.positive]="info.priceChange >= 0" [class.negative]="info.priceChange < 0">
-                ${{ info.currentPrice.toFixed(2) }}
-                <span class="price-change">
-                    {{ info.priceChange >= 0 ? '+' : '' }}{{ info.priceChange.toFixed(2) }}
-                    ({{ info.priceChangePercent >= 0 ? '+' : '' }}{{ info.priceChangePercent.toFixed(2) }}%)
-                </span>
+    @if (chartInfo()) {
+    <div class="chart-info-panel">
+        <div class="info-symbol">{{ chartInfo()!.symbol }}</div>
+        <div class="info-price" [class.positive]="chartInfo()!.priceChange >= 0"
+            [class.negative]="chartInfo()!.priceChange < 0">
+            ${{ chartInfo()!.currentPrice.toFixed(2) }}
+            <span class="price-change">
+                {{ chartInfo()!.priceChange >= 0 ? '+' : '' }}{{ chartInfo()!.priceChange.toFixed(2) }}
+                ({{ chartInfo()!.priceChangePercent >= 0 ? '+' : '' }}{{ chartInfo()!.priceChangePercent.toFixed(2) }}%)
+            </span>
+        </div>
+        <div class="info-stats">
+            <div class="stat">
+                <span class="stat-label">High</span>
+                <span class="stat-value">${{ chartInfo()!.high.toFixed(2) }}</span>
             </div>
-            <div class="info-stats">
-                <div class="stat">
-                    <span class="stat-label">High</span>
-                    <span class="stat-value">${{ info.high.toFixed(2) }}</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Low</span>
-                    <span class="stat-value">${{ info.low.toFixed(2) }}</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Open</span>
-                    <span class="stat-value">${{ info.open.toFixed(2) }}</span>
-                </div>
+            <div class="stat">
+                <span class="stat-label">Low</span>
+                <span class="stat-value">${{ chartInfo()!.low.toFixed(2) }}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Open</span>
+                <span class="stat-value">${{ chartInfo()!.open.toFixed(2) }}</span>
             </div>
         </div>
     </div>
+    }
     <canvas #candleCanvas class="lc-canvas"></canvas>
 </section>

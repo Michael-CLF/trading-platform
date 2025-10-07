@@ -126,12 +126,15 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
   /** ---------------- data lifecycle ---------------- */
 
   private start(sym: string): void {
-    this.teardown(); // clear prior polling
+    this.teardown();
 
-    // initial fetch immediately
     this.fetchBars(sym).then((bars) => {
       this.bars = bars;
-      this.updateChartInfo();
+      console.log('📊 Fetched bars:', bars.length);
+
+      this.updateChartInfo(); // MUST be called here
+      console.log('📊 Chart info after update:', this.chartInfo());
+
       this.signals = this.detectSignals(this.bars);
       this.drawFullSession(this.canvasRef?.nativeElement, this.bars);
     });
@@ -257,7 +260,7 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
 
-    return out.filter((s) => s.confidence >= 0.75);
+    return out.filter((s) => s.confidence >= 0.6);
   }
 
   /** ---------------- canvas drawing (unchanged layout, sturdier fallbacks) ---------------- */
@@ -406,6 +409,7 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     // Buy/Sell badges
+    console.log('🎯 Signals to draw:', this.signals);
     this.drawSignals(ctx, bars, leftPad, step, bodyW, toY, topPad, bottomPad, h);
   }
 
@@ -458,6 +462,13 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
     rightPad: number,
   ): void {
     const y = toY(price);
+
+    // Add safety check - if price is outside range, don't draw
+    if (y < 30 || y > w - 30) {
+      console.warn('Current price line outside visible range:', { price, y });
+      return;
+    }
+
     ctx.save();
     ctx.strokeStyle = '#3b82f6';
     ctx.lineWidth = 1.5;
@@ -468,7 +479,7 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
     ctx.lineTo(w - rightPad, y);
     ctx.stroke();
 
-    // badge
+    // Price badge on the right
     const label = price.toFixed(2);
     ctx.font = 'bold 11px ui-sans-serif, system-ui, -apple-system';
     const tw = ctx.measureText(label).width;
@@ -487,7 +498,6 @@ export class SignalsComponent implements OnInit, AfterViewInit, OnDestroy {
     ctx.fillText(label, bx + bw / 2, y);
     ctx.restore();
   }
-
   private drawSignals(
     ctx: CanvasRenderingContext2D,
     bars: Bar[],

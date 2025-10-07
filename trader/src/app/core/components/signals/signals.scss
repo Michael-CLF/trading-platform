@@ -37,10 +37,6 @@
     background-color: greenyellow;
     color: #000000;
   }
-  .sym:active > span {
-    background-color: red;
-    color: #000000;
-  }
 }
 
 .lc-canvas-wrap {
@@ -131,14 +127,6 @@
   }
 }
 
-/*.lc-canvas-wrap {
-  position: relative; // Important for absolute positioning of info panel
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 0.6rem;
-  padding: 0.5rem;
-  background: rgba(2, 6, 23, 0.35);
-}*/
-
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -179,9 +167,13 @@
   border-radius: 9999px;
   color: #e5e7eb;
   opacity: 0.95;
+  transition: all 0.2s ease; // ADD THIS
 }
+
 .sym > span.active {
-  background: greenyellow; /* green like your up candles */
-  color: #fff;
-  border-color: transparent;
+  background: greenyellow !important; // ADD !important
+  color: #000000 !important;
+  border-color: greenyellow !important;
+  font-weight: 600 !important;
+  opacity: 1 !important;
 }
