@@ -61,7 +61,11 @@ export class AlertSystemService {
     success: '/assets/sounds/success.mp3',
   };
 
+  // Flag to track localStorage availability
+  private storageAvailable: boolean = false;
+
   constructor() {
+    this.checkStorageAvailability();
     this.loadFromStorage();
     this.initializeBrowserNotifications();
     this.initializeAudioContext();
@@ -248,7 +252,7 @@ export class AlertSystemService {
     const current = this.preferences.value;
     const updated = { ...current, ...prefs };
     this.preferences.next(updated);
-    localStorage.setItem(this.PREFS_KEY, JSON.stringify(updated));
+    this.safeSetItem(this.PREFS_KEY, JSON.stringify(updated));
 
     // Re-request notification permission if needed
     if (updated.enableBrowserNotifications && Notification.permission === 'default') {
@@ -314,46 +318,54 @@ export class AlertSystemService {
   private showBrowserNotification(alert: Alert): void {
     if (Notification.permission !== 'granted') return;
 
-    const notification = new Notification(alert.title, {
-      body: alert.message,
-      icon: '/assets/icons/icon-192x192.png',
-      badge: '/assets/icons/badge-72x72.png',
-      tag: alert.id,
-      requireInteraction: alert.priority === 'high' || alert.priority === 'critical',
-    });
+    try {
+      const notification = new Notification(alert.title, {
+        body: alert.message,
+        icon: '/assets/icons/icon-192x192.png',
+        badge: '/assets/icons/badge-72x72.png',
+        tag: alert.id,
+        requireInteraction: alert.priority === 'high' || alert.priority === 'critical',
+      });
 
-    notification.onclick = () => {
-      window.focus();
-      this.markAsRead(alert.id);
+      notification.onclick = () => {
+        window.focus();
+        this.markAsRead(alert.id);
 
-      if (alert.action) {
-        alert.action.callback();
+        if (alert.action) {
+          alert.action.callback();
+        }
+      };
+
+      // Auto-close after 10 seconds for non-critical
+      if (alert.priority !== 'critical') {
+        setTimeout(() => notification.close(), 10000);
       }
-    };
-
-    // Auto-close after 10 seconds for non-critical
-    if (alert.priority !== 'critical') {
-      setTimeout(() => notification.close(), 10000);
+    } catch (error) {
+      console.warn('Failed to show browser notification:', error);
     }
   }
 
   private playSound(priority: AlertPriority): void {
     if (!this.audioContext) return;
 
-    const soundFile = priority === 'critical' ? this.sounds.critical : this.sounds.signal;
+    try {
+      const soundFile = priority === 'critical' ? this.sounds.critical : this.sounds.signal;
 
-    // Simple beep for now - you can add actual sound files later
-    const oscillator = this.audioContext.createOscillator();
-    const gainNode = this.audioContext.createGain();
+      // Simple beep for now - you can add actual sound files later
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
 
-    oscillator.connect(gainNode);
-    gainNode.connect(this.audioContext.destination);
+      oscillator.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
 
-    oscillator.frequency.value = priority === 'critical' ? 800 : 600;
-    gainNode.gain.value = 0.1;
+      oscillator.frequency.value = priority === 'critical' ? 800 : 600;
+      gainNode.gain.value = 0.1;
 
-    oscillator.start();
-    oscillator.stop(this.audioContext.currentTime + 0.2);
+      oscillator.start();
+      oscillator.stop(this.audioContext.currentTime + 0.2);
+    } catch (error) {
+      console.warn('Failed to play sound:', error);
+    }
   }
 
   private initializeBrowserNotifications(): void {
@@ -363,8 +375,12 @@ export class AlertSystemService {
   }
 
   private initializeAudioContext(): void {
-    if ('AudioContext' in window) {
-      this.audioContext = new AudioContext();
+    try {
+      if ('AudioContext' in window) {
+        this.audioContext = new AudioContext();
+      }
+    } catch (error) {
+      console.warn('Failed to initialize audio context:', error);
     }
   }
 
@@ -394,9 +410,69 @@ export class AlertSystemService {
     };
   }
 
+  // Enhanced storage methods with better error handling
+  private checkStorageAvailability(): void {
+    try {
+      const test = '__storage_test__';
+      localStorage.setItem(test, test);
+      localStorage.removeItem(test);
+      this.storageAvailable = true;
+    } catch {
+      this.storageAvailable = false;
+      console.warn('localStorage is not available. Using in-memory storage only.');
+    }
+  }
+
+  private safeGetItem(key: string): string | null {
+    if (!this.storageAvailable) return null;
+
+    try {
+      return localStorage.getItem(key);
+    } catch (error) {
+      console.warn(`Failed to get item from localStorage: ${key}`, error);
+      return null;
+    }
+  }
+
+  private safeSetItem(key: string, value: string): void {
+    if (!this.storageAvailable) return;
+
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      console.warn(`Failed to set item in localStorage: ${key}`, error);
+      // If quota exceeded, try to clear old data
+      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+        this.handleQuotaExceeded();
+      }
+    }
+  }
+
+  private handleQuotaExceeded(): void {
+    try {
+      // Keep only the last 50 alerts when quota is exceeded
+      const alerts = this.alerts.value.slice(0, 50);
+      this.alerts.next(alerts);
+      localStorage.setItem(this.ALERTS_KEY, JSON.stringify(alerts));
+    } catch {
+      // If still failing, clear localStorage for this app
+      console.warn('Clearing localStorage due to quota exceeded');
+      this.clearLocalStorage();
+    }
+  }
+
+  private clearLocalStorage(): void {
+    try {
+      localStorage.removeItem(this.ALERTS_KEY);
+      localStorage.removeItem(this.PREFS_KEY);
+    } catch {
+      // Silent fail - we're already in fallback mode
+    }
+  }
+
   private loadFromStorage(): void {
     try {
-      const alertsData = localStorage.getItem(this.ALERTS_KEY);
+      const alertsData = this.safeGetItem(this.ALERTS_KEY);
       if (alertsData) {
         const alerts = JSON.parse(alertsData).map((a: any) => ({
           ...a,
@@ -406,20 +482,23 @@ export class AlertSystemService {
         this.updateUnreadCount();
       }
 
-      const prefsData = localStorage.getItem(this.PREFS_KEY);
+      const prefsData = this.safeGetItem(this.PREFS_KEY);
       if (prefsData) {
         this.preferences.next(JSON.parse(prefsData));
       }
     } catch (error) {
-      console.error('Failed to load alerts from storage:', error);
+      console.error('Failed to load from storage:', error);
+      // Continue with default/empty state
     }
   }
 
   private saveToStorage(): void {
     try {
-      localStorage.setItem(this.ALERTS_KEY, JSON.stringify(this.alerts.value));
+      const alertsJson = JSON.stringify(this.alerts.value);
+      this.safeSetItem(this.ALERTS_KEY, alertsJson);
     } catch (error) {
       console.error('Failed to save alerts to storage:', error);
+      // Continue without persistence - alerts will still work in memory
     }
   }
 }

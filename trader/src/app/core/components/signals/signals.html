@@ -18,9 +18,9 @@
     </div>
 </header>
 
-<!-- Chart Section -->
-<section class="lc-canvas-wrap full-bleed">
-    <!-- Symbol display in corner -->
+<!-- Chart Section - CHANGED TO CONTAINED -->
+<section class="lc-canvas-wrap contained">
+    <!-- Symbol display in corner (outside SVG for better visibility) -->
     @if (selected(); as sym) {
     <div class="corner-symbol">{{ sym }}</div>
     }
@@ -57,9 +57,17 @@
     <svg class="lc-chart" [attr.viewBox]="'0 0 ' + viewW + ' ' + viewH" [attr.width]="'100%'"
         [attr.height]="chartHeight">
 
-        <!-- Chart frame -->
+        <!-- Chart frame with visible border -->
         <rect [attr.x]="padLeft" [attr.y]="padTop" [attr.width]="viewW - padLeft - padRight"
-            [attr.height]="viewH - padTop - padBottom" class="chart-frame" />
+            [attr.height]="viewH - padTop - padBottom" class="chart-frame chart-frame--visible" />
+
+        <!-- Symbol text in top right corner of chart (inside SVG) -->
+        @if (selected(); as sym) {
+        <text class="chart-symbol" [attr.x]="viewW - padRight - 10" [attr.y]="padTop + 25" text-anchor="end"
+            font-size="20" font-weight="bold" fill="#60a5fa">
+            {{ sym }}
+        </text>
+        }
 
         <!-- Vertical grid lines and time labels -->
         @for (bar of bars(); track bar.t; let i = $index) {

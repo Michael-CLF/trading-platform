@@ -10,16 +10,21 @@
   --live-badge-bg: #1f2937;
   --live-badge-fg: #cfe1ff;
 
-  --buy-guide: #16a34a;
-  --sell-guide: #dc2626;
-  --buy-badge-bg: #16a34a;
-  --sell-badge-bg: #dc2626;
+  // BUY/SELL signal colors are defined here
+  --buy-guide: #16a34a; // Green color for BUY signals
+  --sell-guide: #dc2626; // Red color for SELL signals
+  --buy-badge-bg: #16a34a; // Green background for BUY badge
+  --sell-badge-bg: #dc2626; // Red background for SELL badge
   --badge-fg: #08120a;
 
   /* Pills (you can override these from TS if you want) */
   --pill-active-bg: #adff2f;
   --pill-active-fg: #0b1220;
   --pill-active-border: #60a5fa;
+
+  /* Chart frame styling */
+  --chart-frame-border: #60a5fa; // Blue border color
+  --chart-frame-bg: rgba(2, 6, 23, 0.35); // Slight background tint
 
   /* Wrapper frame (contained mode only) */
   --wrap-border: transparent; /* set to greenyellow if you want a frame */
@@ -111,11 +116,14 @@
 
 /* Contained, centered with optional border/background */
 .lc-canvas-wrap.contained {
-  margin: 0 auto;
-  border: 1px solid var(--wrap-border);
-  border-radius: 0.6rem;
-  padding: 0.5rem;
+  max-width: 1440px; // Maximum width for large screens
+  width: 95%; // Responsive width
+  margin: 2rem auto; // Center with vertical spacing
+  border: 2px solid var(--chart-frame-border);
+  border-radius: 0.75rem;
+  padding: 1rem;
   background: var(--wrap-bg);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 /* Full-bleed, edge-to-edge (no frame) */
@@ -128,11 +136,12 @@
   padding: 0;
 }
 
-/* Chart sizing (use one of these) */
+/* Chart sizing */
 .lc-chart {
   width: 100%;
-  height: var(--chart-height);
+  height: 600px; // Fixed height for consistency
   display: block;
+  margin: 0 auto; // Center the SVG
 }
 .lc-canvas,
 .lc-chart {
@@ -152,9 +161,30 @@
   stroke-width: 1;
   rx: 8;
   ry: 8;
+  // Default: transparent for backwards compatibility
   fill: transparent;
   stroke: transparent;
 }
+
+// Visible border variant
+.chart-frame--visible {
+  fill: var(--chart-frame-bg);
+  stroke: var(--chart-frame-border);
+  stroke-width: 2;
+  stroke-dasharray: none; // Solid border
+  opacity: 1;
+}
+
+// Symbol text inside the chart
+.chart-symbol {
+  fill: #60a5fa; // Blue color to match the border
+  font-size: 18px;
+  font-weight: 700;
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .v-grid {
   stroke: rgba(148, 163, 184, 0.28);
   stroke-width: 1;
@@ -185,20 +215,24 @@
   font: 12px system-ui;
 }
 
+// BUY/SELL badges styling
 .badge {
-  fill: var(--buy-badge-bg);
+  fill: var(--buy-badge-bg); // Default to BUY color (green)
 }
 .badge--sell {
-  fill: var(--sell-badge-bg);
+  fill: var(--sell-badge-bg); // SELL color (red)
 }
 .badge-text {
   fill: #fff;
   font: 600 12px system-ui;
 }
+
+// Signal guide lines (vertical dashed lines)
 .sig-guide {
   stroke-dasharray: 3 4;
   opacity: 0.7;
 }
+
 .chart-info {
   position: absolute;
   top: 10px;
@@ -236,12 +270,16 @@
 /* Overlays */
 .corner-symbol {
   position: absolute;
-  top: 10px;
-  right: 14px;
-  font-weight: 700;
-  font-size: 14px;
+  top: 20px;
+  right: 30px;
+  font-weight: 800;
+  font-size: 24px;
+  color: #60a5fa;
   opacity: 0.9;
   pointer-events: none;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  z-index: 15; // Ensure it's above other elements
 }
 .chart-info-panel {
   position: absolute;

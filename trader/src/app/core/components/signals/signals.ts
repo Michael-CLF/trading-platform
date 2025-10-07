@@ -59,13 +59,13 @@ export class SignalsComponent implements OnInit, OnDestroy {
   readonly chartInfo = signal<ChartInfo | null>(null);
   readonly tradeSignals = signal<TradeSignal[]>([]);
 
-  // Chart geometry configuration
-  readonly viewW = 1200;
-  readonly viewH = 520;
+  // Chart geometry configuration - UPDATED SIZES
+  readonly viewW = 1400; // Increased width
+  readonly viewH = 600; // Increased height
   readonly padLeft = 68;
-  readonly padRight = 8;
-  readonly padTop = 30;
-  readonly padBottom = 22;
+  readonly padRight = 68; // Increased for symmetry
+  readonly padTop = 40; // Increased for symbol display
+  readonly padBottom = 30;
   private _bodyW = 8;
 
   // Theme colors
@@ -107,12 +107,10 @@ export class SignalsComponent implements OnInit, OnDestroy {
   private strategySubscription?: Subscription;
 
   // Chart configuration
-  readonly chartHeight = '520px';
+  readonly chartHeight = '600px'; // Match viewH
 
   ngOnInit(): void {
-    // Watch for selection changes and react accordingly
-    // Note: We'll handle this through the selectSymbol method instead of effect
-    // to avoid injection context issues in Angular 18
+    // Component is ready - user will click to select symbols
   }
 
   ngOnDestroy(): void {
@@ -358,6 +356,15 @@ export class SignalsComponent implements OnInit, OnDestroy {
   // SVG helper methods
 
   /**
+   * Gets the body width for candles
+   * @returns Body width in pixels
+   */
+  getBodyWidth(): number {
+    const s = this.step();
+    return Math.max(2, Math.floor(s * 0.6));
+  }
+
+  /**
    * Calculates the X coordinate for the middle of a bar
    * @param i - Bar index
    * @returns X coordinate
@@ -365,15 +372,6 @@ export class SignalsComponent implements OnInit, OnDestroy {
   xMid(i: number): number {
     const s = this.step();
     return this.padLeft + i * s + s / 2;
-  }
-
-  /**
-   * Gets the body width for candles
-   * @returns Body width in pixels
-   */
-  getBodyWidth(): number {
-    const s = this.step();
-    return Math.max(2, Math.floor(s * 0.6));
   }
 
   /**
