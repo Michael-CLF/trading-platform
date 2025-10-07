@@ -1,45 +1,125 @@
-<header class="lc-header">
+<!-- Header with toolbar -->
+<header class="lc-header" [style.--pill-active-bg]="activePillColor" [style.--pill-active-fg]="pillActiveFg"
+    [style.--pill-active-border]="pillActiveBorder">
+
     <div class="title">Live Candles</div>
     <div class="subtitle">15-minute candles (last 60 bars) — select one symbol</div>
 
     <div class="toolbar">
         <button class="pill" (click)="selectNone()">None</button>
 
-        <!-- Single-select: radios hidden, pill spans styled; click drives selection -->
-        <label class="sym" *ngFor="let s of symbols" (click)="toggle(s)">
-            <input type="radio" name="symbol" class="sr-only" [checked]="selected() === s" aria-label="{{ s }}" />
+        <!-- Symbol selection buttons -->
+        @for (s of symbols; track s) {
+        <label class="sym" (click)="selectSymbol(s)">
+            <input type="radio" name="symbol" class="sr-only" [checked]="selected() === s" />
             <span [class.active]="selected() === s">{{ s }}</span>
         </label>
+        }
     </div>
 </header>
 
-<section class="lc-canvas-wrap">
-    @if (chartInfo()) {
+<!-- Chart Section -->
+<section class="lc-canvas-wrap full-bleed">
+    <!-- Symbol display in corner -->
+    @if (selected(); as sym) {
+    <div class="corner-symbol">{{ sym }}</div>
+    }
+
+    <!-- Chart info panel -->
+    @if (chartInfo(); as info) {
     <div class="chart-info-panel">
-        <div class="info-symbol">{{ chartInfo()!.symbol }}</div>
-        <div class="info-price" [class.positive]="chartInfo()!.priceChange >= 0"
-            [class.negative]="chartInfo()!.priceChange < 0">
-            ${{ chartInfo()!.currentPrice.toFixed(2) }}
+        <div class="info-symbol">{{ info.symbol }}</div>
+        <div class="info-price" [class.positive]="info.priceChange >= 0" [class.negative]="info.priceChange < 0">
+            ${{ info.currentPrice | number:'1.2-2' }}
             <span class="price-change">
-                {{ chartInfo()!.priceChange >= 0 ? '+' : '' }}{{ chartInfo()!.priceChange.toFixed(2) }}
-                ({{ chartInfo()!.priceChangePercent >= 0 ? '+' : '' }}{{ chartInfo()!.priceChangePercent.toFixed(2) }}%)
+                {{ info.priceChange >= 0 ? '+' : '' }}{{ info.priceChange | number:'1.2-2' }}
+                ({{ info.priceChangePercent >= 0 ? '+' : '' }}{{ info.priceChangePercent | number:'1.2-2' }}%)
             </span>
         </div>
         <div class="info-stats">
             <div class="stat">
                 <span class="stat-label">High</span>
-                <span class="stat-value">${{ chartInfo()!.high.toFixed(2) }}</span>
+                <span class="stat-value">${{ info.high | number:'1.2-2' }}</span>
             </div>
             <div class="stat">
                 <span class="stat-label">Low</span>
-                <span class="stat-value">${{ chartInfo()!.low.toFixed(2) }}</span>
+                <span class="stat-value">${{ info.low | number:'1.2-2' }}</span>
             </div>
             <div class="stat">
                 <span class="stat-label">Open</span>
-                <span class="stat-value">${{ chartInfo()!.open.toFixed(2) }}</span>
+                <span class="stat-value">${{ info.open | number:'1.2-2' }}</span>
             </div>
         </div>
     </div>
     }
-    <canvas #candleCanvas class="lc-canvas"></canvas>
+
+    <!-- SVG Chart -->
+    <svg class="lc-chart" [attr.viewBox]="'0 0 ' + viewW + ' ' + viewH" [attr.width]="'100%'"
+        [attr.height]="chartHeight">
+
+        <!-- Chart frame -->
+        <rect [attr.x]="padLeft" [attr.y]="padTop" [attr.width]="viewW - padLeft - padRight"
+            [attr.height]="viewH - padTop - padBottom" class="chart-frame" />
+
+        <!-- Vertical grid lines and time labels -->
+        @for (bar of bars(); track bar.t; let i = $index) {
+        <line class="v-grid" [attr.x1]="xMid(i)" [attr.x2]="xMid(i)" [attr.y1]="padTop" [attr.y2]="viewH - padBottom" />
+
+        @if (i % 5 === 0) {
+        <text class="t-label" [attr.x]="xMid(i)" [attr.y]="viewH - 4">
+            {{ timeLabel(bar.t) }}
+        </text>
+        }
+        }
+
+        <!-- Candle wicks -->
+        @for (bar of bars(); track bar.t; let i = $index) {
+        <line [attr.x1]="xMid(i)" [attr.x2]="xMid(i)" [attr.y1]="y(bar.h)" [attr.y2]="y(bar.l)"
+            [attr.stroke]="bar.c >= bar.o ? '#86efac' : '#ff7a70'" stroke-width="1" />
+        }
+
+        <!-- Candle bodies -->
+        @for (bar of bars(); track bar.t; let i = $index) {
+        <rect [attr.x]="xBody(i)" [attr.y]="y(math.max(bar.o, bar.c))" [attr.width]="getBodyWidth()"
+            [attr.height]="math.max(1, math.abs(y(bar.o) - y(bar.c)))"
+            [attr.fill]="bar.c >= bar.o ? '#53d769' : '#ff3b30'" />
+        }
+
+        <!-- Baseline from opening price -->
+        @if (bars().length > 0) {
+        <line class="baseline" [attr.x1]="padLeft" [attr.x2]="viewW - padRight" [attr.y1]="y(bars()[0].o)"
+            [attr.y2]="y(bars()[0].o)" />
+        }
+
+        <!-- Live price line and badge -->
+        @if (livePrice(); as lp) {
+        <!-- Dashed horizontal line -->
+        <line class="live-line" [attr.x1]="padLeft" [attr.x2]="viewW - padRight" [attr.y1]="y(lp)" [attr.y2]="y(lp)" />
+
+        <!-- Price badge on the right -->
+        <g [attr.transform]="'translate(' + (viewW - padRight + 2) + ',' + (y(lp) - 11) + ')'">
+            <rect width="60" height="22" rx="8" class="live-badge" />
+            <text x="30" y="14" text-anchor="middle" class="live-badge-text">
+                {{ lp | number:'1.2-2' }}
+            </text>
+        </g>
+        }
+
+        <!-- Trading signals (BUY/SELL) -->
+        @for (signal of tradeSignals(); track signal.type + '-' + signal.barIndex) {
+        <!-- Vertical guide line -->
+        <line [attr.x1]="xMid(signal.barIndex)" [attr.x2]="xMid(signal.barIndex)" [attr.y1]="padTop"
+            [attr.y2]="viewH - padBottom" [attr.stroke]="signal.type === 'BUY' ? '#16a34a' : '#dc2626'"
+            class="sig-guide" />
+
+        <!-- Signal badge -->
+        <g [attr.transform]="'translate(' + (xMid(signal.barIndex) - 20) + ',' + 
+                (y(signal.price) + (signal.type === 'BUY' ? 10 : -28)) + ')'">
+            <rect width="40" height="18" rx="6" [attr.class]="signal.type === 'BUY' ? 'badge' : 'badge badge--sell'" />
+            <text x="20" y="12" text-anchor="middle" class="badge-text">
+                {{ signal.type }}
+            </text>
+        </g>
+        }
+    </svg>
 </section>

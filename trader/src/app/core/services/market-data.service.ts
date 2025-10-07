@@ -246,8 +246,28 @@ export class MarketDataService {
     const cached = this.bars15mCache.get(key);
     if (cached) return cached;
 
-    const stream$ = this.getBars1m(symbol, range, timezone).pipe(
-      map((bar1m) => aggregateTo15m(bar1m)),
+    // Prefer native 15m from backend → far smaller payload.
+    // IMPORTANT: map to Bar15m shape (ts15, not ts).
+    const tryDirect15m$: Observable<Bar15m[]> = this.getBars(symbol, '15m', range, timezone).pipe(
+      map((res) =>
+        res.points.map((p) => ({
+          ts15: p.t, // <-- Bar15m expects ts15
+          o: p.o,
+          h: p.h,
+          l: p.l,
+          c: p.c,
+          v: p.v ?? 0,
+        })),
+      ),
+    );
+
+    // Fallback to 1m→15m aggregation if 15m isn’t available
+    const fallbackFrom1m$: Observable<Bar15m[]> = this.getBars1m(symbol, range, timezone).pipe(
+      map((bar1m) => aggregateTo15m(bar1m)), // returns Bar15m[]
+    );
+
+    const stream$ = tryDirect15m$.pipe(
+      catchError(() => fallbackFrom1m$),
       shareReplay({ bufferSize: 1, refCount: false }),
     );
 

@@ -1,11 +1,43 @@
+:host {
+  /* Theme */
+  --chrome-offset: 200px;
+  --candle-up-body: #53d769;
+  --candle-up-wick: #86efac;
+  --candle-down-body: #ff3b30;
+  --candle-down-wick: #ff7a70;
+
+  --live-line: #60a5fa;
+  --live-badge-bg: #1f2937;
+  --live-badge-fg: #cfe1ff;
+
+  --buy-guide: #16a34a;
+  --sell-guide: #dc2626;
+  --buy-badge-bg: #16a34a;
+  --sell-badge-bg: #dc2626;
+  --badge-fg: #08120a;
+
+  /* Pills (you can override these from TS if you want) */
+  --pill-active-bg: #adff2f;
+  --pill-active-fg: #0b1220;
+  --pill-active-border: #60a5fa;
+
+  /* Wrapper frame (contained mode only) */
+  --wrap-border: transparent; /* set to greenyellow if you want a frame */
+  --wrap-bg: rgba(2, 6, 23, 0.35);
+
+  /* Chart sizing */
+  --chart-height: 680px; /* or e.g. 70vh */
+  --chart-vertical-offset: 150px; /* used in .chart--vh variant below */
+}
+
+/* Header + toolbar */
 .lc-header {
   display: grid;
   grid-template-columns: 1fr auto;
   grid-template-rows: auto auto;
   row-gap: 0.25rem;
-  margin-bottom: 0.75rem;
-  width: 90%;
   margin: 0 auto;
+  width: 95%;
 
   .title {
     font-weight: 600;
@@ -15,116 +47,6 @@
     font-size: 0.9rem;
     grid-column: 1 / -1;
   }
-
-  /* keep everything else exactly the same */
-
-  .lc-header {
-    /* …existing rules… */
-
-    label.sym {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      border-radius: 9999px;
-      border: 0;
-
-      span {
-        font-size: 1rem;
-      }
-    }
-  }
-  .sym:hover > span {
-    background-color: greenyellow;
-    color: #000000;
-  }
-}
-
-.lc-canvas-wrap {
-  position: relative;
-  border: 1px solid greenyellow;
-  border-radius: 0.6rem;
-  padding: 0.5rem;
-  background: rgba(2, 6, 23, 0.35);
-  width: 95%;
-  margin: 0 auto;
-}
-
-.lc-symbol {
-  font-weight: 600;
-  margin: 0.25rem 0.25rem 0.5rem;
-  opacity: 0.9;
-}
-
-.lc-canvas {
-  display: block;
-}
-
-.chart-info-panel {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  background: rgba(2, 6, 23, 0.85);
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 0.5rem;
-  padding: 0.75rem;
-  min-width: 200px;
-  backdrop-filter: blur(8px);
-  z-index: 10;
-
-  .info-symbol {
-    font-size: 1.125rem;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-    color: rgba(255, 255, 255, 0.95);
-  }
-
-  .info-price {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-
-    &.positive {
-      color: greenyellow;
-    }
-
-    &.negative {
-      color: #c00000;
-    }
-
-    .price-change {
-      font-size: 0.875rem;
-      font-weight: 500;
-      margin-left: 0.5rem;
-    }
-  }
-
-  .info-stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.75rem;
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid rgba(148, 163, 184, 0.2);
-
-    .stat {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-
-      .stat-label {
-        font-size: 0.75rem;
-        color: rgba(148, 163, 184, 0.8);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-
-      .stat-value {
-        font-size: 0.875rem;
-        font-weight: 600;
-        color: rgba(255, 255, 255, 0.9);
-      }
-    }
-  }
 }
 
 .toolbar {
@@ -132,16 +54,17 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  margin: 0 auto;
-  margin-bottom: 20px;
-  margin-top: 20px;
+  margin: 20px auto;
 }
 .pill {
   background: transparent;
-  color: #ffffff;
+  color: #fff;
 }
 .pill:hover {
   background-color: greenyellow;
+}
+.pill:focus {
+  outline: none;
 }
 
 .sym {
@@ -153,7 +76,6 @@
   position: absolute;
   width: 1px;
   height: 1px;
-  padding: 0;
   margin: -1px;
   overflow: hidden;
   clip: rect(0 0 0 0);
@@ -167,13 +89,215 @@
   border-radius: 9999px;
   color: #e5e7eb;
   opacity: 0.95;
-  transition: all 0.2s ease; // ADD THIS
+  transition: 0.2s ease;
 }
-
-.sym > span.active {
-  background: greenyellow !important; // ADD !important
-  color: #000000 !important;
-  border-color: greenyellow !important;
+.sym:hover > span {
+  background-color: greenyellow;
+  color: #000;
+}
+.sym > span.active,
+.sym:hover > span.active {
+  background: var(--pill-active-bg, #adff2f) !important;
+  color: var(--pill-active-fg, #0b1220) !important;
+  border-color: var(--pill-active-border, #60a5fa) !important;
   font-weight: 600 !important;
   opacity: 1 !important;
+}
+
+/* === WRAPPER (pick one mode with a class) =============================== */
+.lc-canvas-wrap {
+  position: relative;
+}
+
+/* Contained, centered with optional border/background */
+.lc-canvas-wrap.contained {
+  margin: 0 auto;
+  border: 1px solid var(--wrap-border);
+  border-radius: 0.6rem;
+  padding: 0.5rem;
+  background: var(--wrap-bg);
+}
+
+/* Full-bleed, edge-to-edge (no frame) */
+.lc-canvas-wrap.full-bleed {
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+/* Chart sizing (use one of these) */
+.lc-chart {
+  width: 100%;
+  height: var(--chart-height);
+  display: block;
+}
+.lc-canvas,
+.lc-chart {
+  display: block;
+  width: 100%;
+  height: calc(100vh - var(--chrome-offset));
+}
+/* If you prefer viewport height, add class "chart--vh" to <svg> */
+.lc-chart.chart--vh {
+  height: calc(100vh - var(--chart-vertical-offset));
+}
+
+/* Chart visuals */
+.chart-frame {
+  fill: rgba(2, 6, 23, 0.35);
+  stroke: rgba(148, 163, 184, 0.28);
+  stroke-width: 1;
+  rx: 8;
+  ry: 8;
+  fill: transparent;
+  stroke: transparent;
+}
+.v-grid {
+  stroke: rgba(148, 163, 184, 0.28);
+  stroke-width: 1;
+  opacity: 0.26;
+}
+.t-label {
+  fill: rgba(148, 163, 184, 0.78);
+  font:
+    11px ui-sans-serif,
+    system-ui;
+  text-anchor: middle;
+}
+.baseline {
+  stroke: #cbd5e1;
+  opacity: 0.14;
+}
+
+.live-line {
+  stroke: var(--live-line);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+.live-badge {
+  fill: var(--live-badge-bg);
+}
+.live-badge-text {
+  fill: var(--live-badge-fg);
+  font: 12px system-ui;
+}
+
+.badge {
+  fill: var(--buy-badge-bg);
+}
+.badge--sell {
+  fill: var(--sell-badge-bg);
+}
+.badge-text {
+  fill: #fff;
+  font: 600 12px system-ui;
+}
+.sig-guide {
+  stroke-dasharray: 3 4;
+  opacity: 0.7;
+}
+.chart-info {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  z-index: 3;
+  pointer-events: none;
+
+  background: rgba(2, 6, 23, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 160px;
+  backdrop-filter: blur(6px);
+
+  .sym {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 4px;
+    opacity: 0.95;
+  }
+  .row {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .label {
+    width: 38px;
+    opacity: 0.7;
+  }
+  .value {
+    font-weight: 600;
+  }
+}
+
+/* Overlays */
+.corner-symbol {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  font-weight: 700;
+  font-size: 14px;
+  opacity: 0.9;
+  pointer-events: none;
+}
+.chart-info-panel {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 10;
+  background: rgba(2, 6, 23, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  min-width: 200px;
+  backdrop-filter: blur(8px);
+  .info-symbol {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: rgba(255, 255, 255, 0.95);
+  }
+  .info-price {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    &.positive {
+      color: greenyellow;
+    }
+    &.negative {
+      color: #c00000;
+    }
+    .price-change {
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-left: 0.5rem;
+    }
+  }
+  .info-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(148, 163, 184, 0.2);
+    .stat {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      .stat-label {
+        font-size: 0.75rem;
+        color: rgba(148, 163, 184, 0.8);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .stat-value {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.9);
+      }
+    }
+  }
 }
