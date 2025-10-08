@@ -132,7 +132,7 @@
 /* Contained, centered with border - FIXED FOR FULL WIDTH */
 .lc-canvas-wrap.contained {
   max-width: 100%; // Full width
-  width: 98%; // Nearly full width
+  width: 100%; // full width
   margin: 0.5rem auto; // Minimal vertical spacing
   padding: 0; // Remove padding
   background: transparent;
@@ -190,13 +190,13 @@
 }
 
 .v-grid {
-  stroke: rgba(148, 163, 184, 0.28);
+  stroke: #96badd;
   stroke-width: 1;
-  opacity: 0.26;
+  opacity: 0.3;
 }
 .t-label {
   fill: #96badd;
-  font: 18px;
+  font: 16px system-ui;
 }
 .baseline {
   stroke: #cbd5e1;

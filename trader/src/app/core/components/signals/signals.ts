@@ -3,17 +3,19 @@ import { CommonModule } from '@angular/common';
 import { Subscription, firstValueFrom, of, timeout, catchError, timer, switchMap } from 'rxjs';
 
 import { TRADING_SYMBOLS } from '../../constants/symbols.constant';
-import { StrategyService } from '../../services/strategy.service';
+import { StrategyService, UnifiedSignal } from '../../services/strategy.service';
 import { MarketDataService } from '../../services/market-data.service';
 
 // Type definitions
 type Bar = { t: number; o: number; h: number; l: number; c: number };
 
+// Find this interface near the top (around line 20)
 interface TradeSignal {
   barIndex: number;
   type: 'BUY' | 'SELL';
   price: number;
   confidence: number;
+  action?: string; // Add this - will be 'buy', 'strong_buy', 'sell', 'strong_sell'
 }
 
 interface ChartInfo {
@@ -113,7 +115,8 @@ export class SignalsComponent implements OnInit, OnDestroy {
       return [];
     }
 
-    const labelEveryNBars = 4; // Every 4 bars = 1 hour
+    // Show label every 2 bars = 30 minutes for better spacing
+    const labelEveryNBars = 1;
 
     const ticks: Array<{ x: number; label: string }> = [];
 
@@ -165,13 +168,159 @@ export class SignalsComponent implements OnInit, OnDestroy {
     this.selectSymbol(sym);
   }
 
+  private convertUnifiedSignalToTradeSignals(
+    bars: Bar[],
+    unifiedSignal: UnifiedSignal | null | undefined,
+  ): TradeSignal[] {
+    console.log('=== convertUnifiedSignalToTradeSignals CALLED ===');
+    console.log('bars length:', bars?.length);
+    console.log('unifiedSignal:', unifiedSignal);
+    console.log('unifiedSignal type:', typeof unifiedSignal);
+
+    if (!unifiedSignal) {
+      console.log('❌ No unified signal - returning empty array');
+      return [];
+    }
+
+    if (!bars.length) {
+      console.log('❌ No bars - returning empty array');
+      return [];
+    }
+
+    console.log('✅ Have signal and bars, processing...');
+
+    const signals: TradeSignal[] = [];
+    const lastIndex = bars.length - 1;
+
+    const action = unifiedSignal.action;
+    const confidence = unifiedSignal.confidence ?? 0;
+
+    console.log('Signal action:', action);
+    console.log('Signal confidence:', confidence);
+
+    if (confidence < 0.5) {
+      console.log('❌ Confidence too low:', confidence, '(need > 0.5)');
+      return [];
+    }
+
+    let signalType: 'BUY' | 'SELL' | null = null;
+
+    if (action === 'buy' || action === 'strong_buy') {
+      signalType = 'BUY';
+      console.log('✅ BUY signal detected');
+    } else if (action === 'sell' || action === 'strong_sell') {
+      signalType = 'SELL';
+      console.log('✅ SELL signal detected');
+    } else {
+      console.log('❌ Action is', action, '- no badge to show');
+    }
+
+    if (!signalType) {
+      console.log('❌ No signal type, returning empty');
+      return [];
+    }
+
+    signals.push({
+      barIndex: lastIndex,
+      type: signalType,
+      price: bars[lastIndex].c,
+      confidence: confidence,
+      action: action,
+    });
+
+    console.log('🎯 GENERATED SIGNAL:', signals[0]);
+    console.log('=== END convertUnifiedSignalToTradeSignals ===');
+    return signals;
+  }
+
+  /**
+   * Calculate signals directly if StrategyService doesn't have them yet
+   */
+  private async ensureSignalsExist(symbol: string, bars: Bar[]): Promise<void> {
+    try {
+      // Check if we already have a signal
+      const existingSignal = await firstValueFrom(
+        this.strategy.getUnifiedSignal(symbol).pipe(
+          timeout(2000),
+          catchError(() => of(null)),
+        ),
+      );
+
+      // If signal exists and is recent, use it
+      if (existingSignal && existingSignal.action !== 'hold') {
+        console.log('Using existing signal from StrategyService:', existingSignal);
+        return;
+      }
+
+      console.log('No signal in StrategyService, calculating directly...');
+
+      // Calculate SMA signal (same logic as watchlist)
+      const closes = bars.map((b) => b.c);
+      const smaSignal = this.calculateSMASignal(symbol, closes);
+
+      if (smaSignal) {
+        // Update StrategyService with our calculated signal
+        this.strategy.updateTechnicalIndicator(
+          symbol,
+          'sma_cross',
+          smaSignal.signal,
+          smaSignal.strength,
+        );
+        console.log('Calculated and stored SMA signal:', smaSignal);
+      }
+    } catch (error) {
+      console.error('Error ensuring signals exist:', error);
+    }
+  }
+
+  /**
+   * Calculate SMA signal (copied from watchlist)
+   */
+  private calculateSMASignal(
+    symbol: string,
+    closes: number[],
+  ): { signal: 'buy' | 'sell' | 'neutral'; strength: number } | null {
+    const fast = 5;
+    const slow = 20;
+    const lastIndex = closes.length - 1;
+
+    const sma = (period: number, index: number): number => {
+      if (index + 1 < period) return NaN;
+      let sum = 0;
+      for (let i = index - period + 1; i <= index; i++) {
+        sum += closes[i];
+      }
+      return sum / period;
+    };
+
+    const sma5Now = sma(fast, lastIndex);
+    const sma20Now = sma(slow, lastIndex);
+    const sma5Prev = sma(fast, lastIndex - 1);
+    const sma20Prev = sma(slow, lastIndex - 1);
+
+    if (!isFinite(sma5Now) || !isFinite(sma20Now) || !isFinite(sma5Prev) || !isFinite(sma20Prev)) {
+      return null;
+    }
+
+    // Bullish crossover
+    if (sma5Prev <= sma20Prev && sma5Now > sma20Now) {
+      const strength = Math.min(0.9, 0.6 + ((sma5Now - sma20Now) / sma20Now) * 10);
+      return { signal: 'buy', strength };
+    }
+    // Bearish crossover
+    if (sma5Prev >= sma20Prev && sma5Now < sma20Now) {
+      const strength = Math.min(0.9, 0.6 + ((sma20Now - sma5Now) / sma20Now) * 10);
+      return { signal: 'sell', strength };
+    }
+
+    return { signal: 'neutral', strength: 0.3 };
+  }
   private clearChart(): void {
     this.bars.set([]);
     this.livePrice.set(null);
     this.chartInfo.set(null);
     this.tradeSignals.set([]);
   }
-
   private async start(sym: string): Promise<void> {
     this.teardown();
 
@@ -182,7 +331,21 @@ export class SignalsComponent implements OnInit, OnDestroy {
       console.log('Bars signal after set:', this.bars());
 
       this.updateChartInfo();
-      this.tradeSignals.set(this.detectSignals(b));
+      await this.ensureSignalsExist(sym, b);
+
+      // Get initial unified signal
+      try {
+        const unifiedSignal = await firstValueFrom(
+          this.strategy.getUnifiedSignal(sym).pipe(
+            timeout(5000),
+            catchError(() => of(null)),
+          ),
+        );
+        this.tradeSignals.set(this.convertUnifiedSignalToTradeSignals(b, unifiedSignal));
+      } catch (error) {
+        console.error('Error getting initial unified signal:', error);
+        this.tradeSignals.set([]);
+      }
     } catch (error) {
       console.error('Error fetching initial bars:', error);
     }
@@ -196,7 +359,20 @@ export class SignalsComponent implements OnInit, OnDestroy {
         const b = await this.fetchBars(s);
         this.bars.set(b);
         this.updateChartInfo();
-        this.tradeSignals.set(this.detectSignals(b));
+        await this.ensureSignalsExist(s, b);
+
+        // Get updated unified signal
+        try {
+          const unifiedSignal = await firstValueFrom(
+            this.strategy.getUnifiedSignal(s).pipe(
+              timeout(5000),
+              catchError(() => of(null)),
+            ),
+          );
+          this.tradeSignals.set(this.convertUnifiedSignalToTradeSignals(b, unifiedSignal));
+        } catch (error) {
+          console.error('Error getting unified signal:', error);
+        }
       } catch (error) {
         console.error('Error refreshing bars:', error);
       }
@@ -213,9 +389,12 @@ export class SignalsComponent implements OnInit, OnDestroy {
       });
 
     // Setup strategy signal subscription
-    this.strategySubscription = this.strategy.getUnifiedSignal(sym).subscribe(() => {
-      const b = this.bars();
-      this.tradeSignals.set(this.detectSignals(b));
+    this.strategySubscription = this.strategy.getUnifiedSignal(sym).subscribe((unifiedSignal) => {
+      console.log('Received unified signal for', sym, unifiedSignal);
+      const bars = this.bars();
+
+      // Convert unified signal to trade signals for display
+      this.tradeSignals.set(this.convertUnifiedSignalToTradeSignals(bars, unifiedSignal));
     });
 
     // Track all subscriptions
@@ -355,49 +534,6 @@ export class SignalsComponent implements OnInit, OnDestroy {
       open: first.o,
       volume: 0,
     });
-  }
-
-  private detectSignals(bars: Bar[]): TradeSignal[] {
-    if (bars.length < 21) return [];
-
-    const closes = bars.map((b) => b.c);
-
-    const sma = (period: number, index: number): number => {
-      if (index + 1 < period) return NaN;
-      const sum = closes.slice(index - period + 1, index + 1).reduce((a, b) => a + b, 0);
-      return sum / period;
-    };
-
-    const signals: TradeSignal[] = [];
-
-    for (let i = 20; i < bars.length; i++) {
-      const s5 = sma(5, i);
-      const s20 = sma(20, i);
-      const s5Prev = sma(5, i - 1);
-      const s20Prev = sma(20, i - 1);
-
-      if (![s5, s20, s5Prev, s20Prev].every(Number.isFinite)) continue;
-
-      if (s5Prev <= s20Prev && s5 > s20) {
-        signals.push({
-          barIndex: i,
-          type: 'BUY',
-          price: bars[i].c,
-          confidence: 0.8,
-        });
-      }
-
-      if (s5Prev >= s20Prev && s5 < s20) {
-        signals.push({
-          barIndex: i,
-          type: 'SELL',
-          price: bars[i].c,
-          confidence: 0.8,
-        });
-      }
-    }
-
-    return signals;
   }
 
   // SVG helper methods

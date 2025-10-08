@@ -2,11 +2,9 @@
 <header class="lc-header" [style.--pill-active-bg]="activePillColor" [style.--pill-active-fg]="pillActiveFg"
     [style.--pill-active-border]="pillActiveBorder">
     <div class="toolbar">
-        <!-- REPLACE this button with the one below -->
         <button class="pill" (click)="selectNone()" [class.active]="!selected()">
         </button>
 
-        <!-- Symbol selection buttons (unchanged) -->
         @for (s of symbols; track s) {
         <label class="sym" (click)="selectSymbol(s)">
             <input type="radio" name="symbol" class="sr-only" [checked]="selected() === s" />
@@ -16,15 +14,12 @@
     </div>
 </header>
 
-
-<!-- Chart Section - CHANGED TO CONTAINED -->
+<!-- Chart Section -->
 <section class="lc-canvas-wrap contained">
-    <!-- Symbol display in corner (outside SVG for better visibility) -->
     @if (selected(); as sym) {
     <div class="corner-symbol">{{ sym }}</div>
     }
 
-    <!-- Chart info panel -->
     @if (chartInfo(); as info) {
     <div class="chart-info-panel">
         <div class="info-symbol">{{ info.symbol }}</div>
@@ -56,11 +51,10 @@
     <svg class="lc-chart" [attr.viewBox]="'0 0 ' + viewW + ' ' + viewH" [attr.width]="'100%'"
         [attr.height]="chartHeight">
 
-        <!-- Chart frame with visible border -->
+        <!-- Chart frame -->
         <rect [attr.x]="padLeft" [attr.y]="padTop" [attr.width]="viewW - padLeft - padRight"
             [attr.height]="viewH - padTop - padBottom" class="chart-frame chart-frame--visible" />
 
-        <!-- Symbol text in top right corner of chart (inside SVG) -->
         @if (selected(); as sym) {
         <text class="chart-symbol" [attr.x]="viewW - padRight - 10" [attr.y]="padTop + 25" text-anchor="end"
             font-size="20" font-weight="bold" fill="#60a5fa">
@@ -68,12 +62,12 @@
         </text>
         }
 
-        <!-- Vertical grid lines (one per bar) -->
+        <!-- Vertical grid lines -->
         @for (bar of bars(); track bar.t; let i = $index) {
         <line class="v-grid" [attr.x1]="xMid(i)" [attr.x2]="xMid(i)" [attr.y1]="padTop" [attr.y2]="viewH - padBottom" />
         }
 
-        <!-- Time labels using xTicks computed signal -->
+        <!-- Time labels using xTicks -->
         @for (tick of xTicks(); track tick.x) {
         <text class="t-label" [attr.x]="tick.x" [attr.y]="viewH - padBottom + 20">
             {{ tick.label }}
@@ -101,10 +95,8 @@
 
         <!-- Live price line and badge -->
         @if (livePrice(); as lp) {
-        <!-- Dashed horizontal line -->
         <line class="live-line" [attr.x1]="padLeft" [attr.x2]="viewW - padRight" [attr.y1]="y(lp)" [attr.y2]="y(lp)" />
 
-        <!-- Price badge on the right (LARGER + inside frame) -->
         <g [attr.transform]="'translate(' + (viewW - padRight - 74) + ',' + (y(lp) - 13) + ')'">
             <rect width="72" height="35" rx="8" class="live-badge" />
             <text x="36" y="24" text-anchor="middle" class="live-badge-text">
@@ -113,14 +105,14 @@
         </g>
         }
 
-        <!-- Trading signals (BUY/SELL) -->
+        <!-- Trading signals (BUY/SELL) - THIS WAS MISSING OR REMOVED -->
         @for (signal of tradeSignals(); track signal.type + '-' + signal.barIndex) {
         <!-- Vertical guide line -->
         <line [attr.x1]="xMid(signal.barIndex)" [attr.x2]="xMid(signal.barIndex)" [attr.y1]="padTop"
             [attr.y2]="viewH - padBottom" [attr.stroke]="signal.type === 'BUY' ? '#16a34a' : '#dc2626'"
             class="sig-guide" />
 
-        <!-- Signal badge (LARGER) -->
+        <!-- Signal badge -->
         <g [attr.transform]="'translate(' + (xMid(signal.barIndex) - 28) + ',' +
         (y(signal.price) + (signal.type === 'BUY' ? 12 : -34)) + ')'">
             <rect width="56" height="35" rx="8" [attr.class]="signal.type === 'BUY' ? 'badge' : 'badge badge--sell'" />
@@ -129,5 +121,6 @@
             </text>
         </g>
         }
+
     </svg>
 </section>
