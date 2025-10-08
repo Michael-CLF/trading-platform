@@ -12,7 +12,6 @@
             <input type="radio" name="symbol" class="sr-only" [checked]="selected() === s" />
             <span [class.active]="selected() === s">{{ s }}</span>
         </label>
-
         }
     </div>
 </header>
@@ -69,15 +68,16 @@
         </text>
         }
 
-        <!-- Vertical grid lines and time labels (now inside the frame) -->
+        <!-- Vertical grid lines (one per bar) -->
         @for (bar of bars(); track bar.t; let i = $index) {
         <line class="v-grid" [attr.x1]="xMid(i)" [attr.x2]="xMid(i)" [attr.y1]="padTop" [attr.y2]="viewH - padBottom" />
-
-        @if (i % 5 === 0) {
-        <text class="t-label" [attr.x]="xMid(i)" [attr.y]="viewH - padBottom + 20">
-            {{ timeLabel(bar.t) }}
-        </text>
         }
+
+        <!-- Time labels using xTicks computed signal -->
+        @for (tick of xTicks(); track tick.x) {
+        <text class="t-label" [attr.x]="tick.x" [attr.y]="viewH - padBottom + 20">
+            {{ tick.label }}
+        </text>
         }
 
         <!-- Candle wicks -->
@@ -104,8 +104,6 @@
         <!-- Dashed horizontal line -->
         <line class="live-line" [attr.x1]="padLeft" [attr.x2]="viewW - padRight" [attr.y1]="y(lp)" [attr.y2]="y(lp)" />
 
-        <!-- Price badge on the right -->
-        <!-- Badge is 60px wide; pull it left by ~62px (width + 2px padding) -->
         <!-- Price badge on the right (LARGER + inside frame) -->
         <g [attr.transform]="'translate(' + (viewW - padRight - 74) + ',' + (y(lp) - 13) + ')'">
             <rect width="72" height="35" rx="8" class="live-badge" />
@@ -113,7 +111,6 @@
                 {{ lp | number:'1.2-2' }}
             </text>
         </g>
-
         }
 
         <!-- Trading signals (BUY/SELL) -->
@@ -123,7 +120,6 @@
             [attr.y2]="viewH - padBottom" [attr.stroke]="signal.type === 'BUY' ? '#16a34a' : '#dc2626'"
             class="sig-guide" />
 
-        <!-- Signal badge -->
         <!-- Signal badge (LARGER) -->
         <g [attr.transform]="'translate(' + (xMid(signal.barIndex) - 28) + ',' +
         (y(signal.price) + (signal.type === 'BUY' ? 12 : -34)) + ')'">
@@ -132,7 +128,6 @@
                 {{ signal.type }}
             </text>
         </g>
-
         }
     </svg>
 </section>

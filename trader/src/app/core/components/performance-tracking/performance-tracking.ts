@@ -23,6 +23,7 @@ import { EditRiskModalComponent } from '../edit-risk-modal/edit-risk-modal';
     EditRiskModalComponent,
   ],
   templateUrl: './performance-tracking.html',
+  styleUrl: './performance-tracking.scss',
 })
 export class PerformanceTrackingComponent implements OnDestroy {
   /** Modal state */

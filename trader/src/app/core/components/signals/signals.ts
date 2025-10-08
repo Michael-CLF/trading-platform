@@ -1,17 +1,9 @@
-import {
-  Component,
-  OnDestroy,
-  OnInit,
-  ChangeDetectionStrategy,
-  inject,
-  signal,
-  computed,
-} from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription, firstValueFrom, of, timeout, catchError, timer, switchMap } from 'rxjs';
 
 import { TRADING_SYMBOLS } from '../../constants/symbols.constant';
-import { StrategyService, UnifiedSignal } from '../../services/strategy.service';
+import { StrategyService } from '../../services/strategy.service';
 import { MarketDataService } from '../../services/market-data.service';
 
 // Type definitions
@@ -41,7 +33,6 @@ interface ChartInfo {
   imports: [CommonModule],
   templateUrl: './signals.html',
   styleUrls: ['./signals.scss'],
-  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class SignalsComponent implements OnInit, OnDestroy {
   // Service injection using inject() - Angular 18 best practice
@@ -59,14 +50,13 @@ export class SignalsComponent implements OnInit, OnDestroy {
   readonly chartInfo = signal<ChartInfo | null>(null);
   readonly tradeSignals = signal<TradeSignal[]>([]);
 
-  // Chart geometry configuration - MAXIMIZED SIZES
-  readonly viewW = 1900; // Increased width for fuller screen
-  readonly viewH = 800; // Increased height to include time labels
-  readonly padLeft = 40; // Reduced padding
-  readonly padRight = 40; // Reduced padding
-  readonly padTop = 30; // Reduced top padding
-  readonly padBottom = 40; // Increased for time labels inside frame
-  private _bodyW = 8;
+  // Chart geometry configuration
+  readonly viewW = 1900;
+  readonly viewH = 800;
+  readonly padLeft = 40;
+  readonly padRight = 40;
+  readonly padTop = 30;
+  readonly padBottom = 40;
   readonly chartHeight = this.viewH + 'px';
 
   // Theme colors
@@ -107,52 +97,74 @@ export class SignalsComponent implements OnInit, OnDestroy {
   private quoteSubscription?: Subscription;
   private strategySubscription?: Subscription;
 
+  // Time formatter
+  private readonly timeFormatter = new Intl.DateTimeFormat([], {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  // X-axis ticks computed signal
+  readonly xTicks = computed<Array<{ x: number; label: string }>>(() => {
+    const b = this.bars();
+    console.log('xTicks recalculating with bars.length =', b.length);
+
+    if (!b.length) {
+      console.log('No bars yet, returning empty ticks');
+      return [];
+    }
+
+    const labelEveryNBars = 4; // Every 4 bars = 1 hour
+
+    const ticks: Array<{ x: number; label: string }> = [];
+
+    for (let i = 0; i < b.length; i += labelEveryNBars) {
+      const bar = b[i];
+      const x = this.xMid(i);
+      const label = this.timeFormatter.format(new Date(bar.t));
+      ticks.push({ x, label });
+    }
+
+    const lastIndex = b.length - 1;
+    if (lastIndex % labelEveryNBars !== 0 && lastIndex > 0) {
+      const lastBar = b[lastIndex];
+      const x = this.xMid(lastIndex);
+      const label = this.timeFormatter.format(new Date(lastBar.t));
+      ticks.push({ x, label });
+    }
+
+    console.log('xTicks returning', ticks.length, 'ticks:', ticks);
+    return ticks;
+  });
+
   ngOnInit(): void {
-    // Component is ready - user will click to select symbols
+    // Component is ready
   }
 
   ngOnDestroy(): void {
     this.teardown();
   }
 
-  /**
-   * Selects a symbol and starts data fetching
-   * @param symbol - The trading symbol to select
-   */
   selectSymbol(symbol: string): void {
     const current = this.selected();
     if (current === symbol) {
-      // Deselect if clicking the same symbol
       this.selectNone();
     } else {
-      // Clear previous data and set new symbol
       this.teardown();
       this.selected.set(symbol);
-      // Start fetching data for the new symbol
       this.start(symbol);
     }
   }
 
-  /**
-   * Deselects the current symbol and clears all data
-   */
   selectNone(): void {
     this.teardown();
     this.selected.set(null);
     this.clearChart();
   }
 
-  /**
-   * Toggles selection of a symbol
-   * @param sym - The symbol to toggle
-   */
   toggle(sym: string): void {
     this.selectSymbol(sym);
   }
 
-  /**
-   * Clears all chart data
-   */
   private clearChart(): void {
     this.bars.set([]);
     this.livePrice.set(null);
@@ -160,17 +172,15 @@ export class SignalsComponent implements OnInit, OnDestroy {
     this.tradeSignals.set([]);
   }
 
-  /**
-   * Starts data fetching for the selected symbol
-   * @param sym - The symbol to fetch data for
-   */
   private async start(sym: string): Promise<void> {
     this.teardown();
 
-    // Fetch initial bars
     try {
       const b = await this.fetchBars(sym);
+      console.log('About to set bars signal with:', b.length, 'bars');
       this.bars.set(b);
+      console.log('Bars signal after set:', this.bars());
+
       this.updateChartInfo();
       this.tradeSignals.set(this.detectSignals(b));
     } catch (error) {
@@ -214,9 +224,6 @@ export class SignalsComponent implements OnInit, OnDestroy {
     if (this.strategySubscription) this.subscriptions.add(this.strategySubscription);
   }
 
-  /**
-   * Cleans up all active subscriptions
-   */
   private teardown(): void {
     this.subscriptions.forEach((sub) => sub.unsubscribe());
     this.subscriptions.clear();
@@ -230,49 +237,99 @@ export class SignalsComponent implements OnInit, OnDestroy {
     this.strategySubscription = undefined;
   }
 
-  /**
-   * Fetches bar data for a symbol
-   * @param symbol - The symbol to fetch bars for
-   * @returns Promise of Bar array
-   */
   private async fetchBars(symbol: string): Promise<Bar[]> {
+    console.log('fetchBars called for symbol:', symbol);
+
     const raw = await firstValueFrom(
-      this.market.getBars15m(symbol, '5d').pipe(
+      this.market.getBars15m(symbol, '1d').pipe(
         timeout(10_000),
         catchError(() => of([])),
       ),
     );
 
+    console.log('Raw data received:', raw);
+    console.log('Raw data length:', raw?.length);
+
     const bars: Bar[] = (raw as any[])
-      .map((b: any) => ({
-        t: b.ts ?? b.t ?? b.time ?? Date.now(),
-        o: b.o ?? b.open,
-        h: b.h ?? b.high,
-        l: b.l ?? b.low,
-        c: b.c ?? b.close,
-      }))
+      .map((b: any) => {
+        let timestamp: number;
+
+        if (b.ts15) {
+          timestamp = new Date(b.ts15).getTime();
+        } else if (typeof b.ts === 'string') {
+          timestamp = new Date(b.ts).getTime();
+        } else if (typeof b.ts === 'number') {
+          timestamp = b.ts;
+        } else if (b.t) {
+          timestamp = typeof b.t === 'number' ? b.t : new Date(b.t).getTime();
+        } else if (b.time) {
+          timestamp = typeof b.time === 'number' ? b.time : new Date(b.time).getTime();
+        } else {
+          timestamp = Date.now();
+        }
+
+        return {
+          t: timestamp,
+          o: b.o ?? b.open,
+          h: b.h ?? b.high,
+          l: b.l ?? b.low,
+          c: b.c ?? b.close,
+        };
+      })
       .filter((v) => [v.t, v.o, v.h, v.l, v.c].every((n) => Number.isFinite(n)));
 
-    // Limit to last 60 bars (today's session if available)
-    const last = bars.at(-1);
-    if (!last) return [];
+    console.log('Bars after mapping:', bars.length);
 
-    const day = new Date(last.t);
-    day.setHours(0, 0, 0, 0);
+    if (!bars.length) {
+      console.log('No bars after mapping, returning empty array');
+      return [];
+    }
 
-    const start = new Date(day);
-    start.setHours(9, 30, 0, 0);
+    // Get TODAY in Eastern Time (market timezone)
+    const now = new Date();
+    const todayET = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
 
-    const end = new Date(day);
-    end.setHours(16, 0, 0, 0);
+    // Set to start of today
+    const todayStart = new Date(todayET);
+    todayStart.setHours(0, 0, 0, 0);
 
-    const todayBars = bars.filter((b) => b.t >= +start && b.t <= +end);
-    return (todayBars.length ? todayBars : bars).slice(-60);
+    // Market open: 9:30 AM ET today
+    const marketOpen = new Date(todayStart);
+    marketOpen.setHours(9, 30, 0, 0);
+
+    // Market close: 4:00 PM ET today
+    const marketClose = new Date(todayStart);
+    marketClose.setHours(16, 0, 0, 0);
+
+    console.log('Filtering for today only:', {
+      marketOpen: marketOpen.toLocaleString('en-US', { timeZone: 'America/New_York' }),
+      marketClose: marketClose.toLocaleString('en-US', { timeZone: 'America/New_York' }),
+    });
+
+    // Filter to ONLY today's trading session
+    const todayBars = bars.filter((b) => {
+      return b.t >= marketOpen.getTime() && b.t <= marketClose.getTime();
+    });
+
+    console.log('Today bars filtered:', todayBars.length);
+
+    if (todayBars.length === 0) {
+      console.log("No bars in today's session yet");
+      return [];
+    }
+
+    console.log(
+      'Time range:',
+      new Date(todayBars[0].t).toLocaleString('en-US', { timeZone: 'America/New_York' }),
+      'to',
+      new Date(todayBars[todayBars.length - 1].t).toLocaleString('en-US', {
+        timeZone: 'America/New_York',
+      }),
+    );
+
+    return todayBars;
   }
 
-  /**
-   * Updates the chart info panel data
-   */
   private updateChartInfo(): void {
     const b = this.bars();
     const s = this.selected();
@@ -300,17 +357,11 @@ export class SignalsComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Detects trading signals using SMA crossover strategy
-   * @param bars - Array of bars to analyze
-   * @returns Array of trade signals
-   */
   private detectSignals(bars: Bar[]): TradeSignal[] {
     if (bars.length < 21) return [];
 
     const closes = bars.map((b) => b.c);
 
-    // Simple Moving Average calculation
     const sma = (period: number, index: number): number => {
       if (index + 1 < period) return NaN;
       const sum = closes.slice(index - period + 1, index + 1).reduce((a, b) => a + b, 0);
@@ -327,7 +378,6 @@ export class SignalsComponent implements OnInit, OnDestroy {
 
       if (![s5, s20, s5Prev, s20Prev].every(Number.isFinite)) continue;
 
-      // Bullish crossover
       if (s5Prev <= s20Prev && s5 > s20) {
         signals.push({
           barIndex: i,
@@ -337,7 +387,6 @@ export class SignalsComponent implements OnInit, OnDestroy {
         });
       }
 
-      // Bearish crossover
       if (s5Prev >= s20Prev && s5 < s20) {
         signals.push({
           barIndex: i,
@@ -352,40 +401,20 @@ export class SignalsComponent implements OnInit, OnDestroy {
   }
 
   // SVG helper methods
-
-  /**
-   * Gets the body width for candles
-   * @returns Body width in pixels
-   */
   getBodyWidth(): number {
     const s = this.step();
     return Math.max(2, Math.floor(s * 0.6));
   }
 
-  /**
-   * Calculates the X coordinate for the middle of a bar
-   * @param i - Bar index
-   * @returns X coordinate
-   */
   xMid(i: number): number {
     const s = this.step();
     return this.padLeft + i * s + s / 2;
   }
 
-  /**
-   * Calculates the X coordinate for the body of a bar
-   * @param i - Bar index
-   * @returns X coordinate
-   */
   xBody(i: number): number {
     return this.xMid(i) - this.getBodyWidth() / 2;
   }
 
-  /**
-   * Calculates the Y coordinate for a price
-   * @param price - Price value
-   * @returns Y coordinate
-   */
   y(price: number): number {
     const dom = this.yDomain();
     if (!dom) return this.viewH - this.padBottom;
@@ -395,11 +424,6 @@ export class SignalsComponent implements OnInit, OnDestroy {
     return this.padTop + (1 - ratio) * this.innerH();
   }
 
-  /**
-   * Formats timestamp to time label
-   * @param timestamp - Unix timestamp
-   * @returns Formatted time string
-   */
   timeLabel(timestamp: number): string {
     return new Date(timestamp).toLocaleTimeString([], {
       hour: '2-digit',
@@ -407,7 +431,6 @@ export class SignalsComponent implements OnInit, OnDestroy {
     });
   }
 
-  // Track by functions for *ngFor optimization
   trackBar(_: number, bar: Bar): number {
     return bar.t;
   }
