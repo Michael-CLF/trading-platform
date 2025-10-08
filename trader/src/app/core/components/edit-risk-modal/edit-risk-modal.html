@@ -1,0 +1,27 @@
+<div class="overlay" (click)="onCancel()"></div>
+<div class="modal" (click)="$event.stopPropagation()">
+    <h3 class="title">Edit Risk</h3>
+
+    <div class="sym">Symbol: <strong>{{ symbol }}</strong></div>
+
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+        <div class="row">
+            <label>Stop Loss</label>
+            <input type="number" step="any" formControlName="stopLoss" placeholder="leave blank to skip" />
+        </div>
+
+        <div class="row">
+            <label>Take Profit</label>
+            <input type="number" step="any" formControlName="takeProfit" placeholder="leave blank to skip" />
+        </div>
+
+        <div class="actions">
+            <button type="button" class="btn" (click)="onCancel()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+    </form>
+
+    <div class="hint">
+        Both values are optional. If you set them, your position will auto-close when price crosses the level.
+    </div>
+</div>

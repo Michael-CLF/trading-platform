@@ -11,11 +11,17 @@ import {
 import { MarketDataService } from '../../services/market-data.service';
 import { TradeEntryModalComponent } from '../../components/trade-entry-modal/trade-entry-modal';
 import { ClosePositionModalComponent } from '../close-position-modal/close-position-modal';
+import { EditRiskModalComponent } from '../edit-risk-modal/edit-risk-modal';
 
 @Component({
   selector: 'app-performance-tracking',
   standalone: true,
-  imports: [CommonModule, TradeEntryModalComponent, ClosePositionModalComponent],
+  imports: [
+    CommonModule,
+    TradeEntryModalComponent,
+    ClosePositionModalComponent,
+    EditRiskModalComponent,
+  ],
   templateUrl: './performance-tracking.html',
 })
 export class PerformanceTrackingComponent implements OnDestroy {
@@ -25,6 +31,12 @@ export class PerformanceTrackingComponent implements OnDestroy {
   // Close position modal
   showCloseModal = false;
   closeSymbol: string | null = null;
+
+  // Edit risk modal (SL/TP)
+  showRiskModal = false;
+  riskSymbol: string | null = null;
+  riskStopLoss?: number | null = null;
+  riskTakeProfit?: number | null = null;
 
   openCloseModal(symbol: string) {
     this.closeSymbol = symbol;
@@ -37,6 +49,33 @@ export class PerformanceTrackingComponent implements OnDestroy {
     if (!this.closeSymbol) return;
     this.positionTracker.closePosition(this.closeSymbol, exitPrice, 'manual');
     this.showCloseModal = false;
+  }
+
+  openRiskModal(p: { symbol: string; stopLoss?: number; takeProfit?: number }) {
+    this.riskSymbol = p.symbol;
+    this.riskStopLoss = p.stopLoss ?? null;
+    this.riskTakeProfit = p.takeProfit ?? null;
+    this.showRiskModal = true;
+  }
+  cancelRiskModal() {
+    this.showRiskModal = false;
+  }
+  saveRiskModal(evt: { stopLoss?: number; takeProfit?: number }) {
+    if (!this.riskSymbol) return;
+
+    if (evt.stopLoss === undefined) {
+      this.positionTracker.clearStopLoss(this.riskSymbol);
+    } else {
+      this.positionTracker.setStopLoss(this.riskSymbol, evt.stopLoss);
+    }
+
+    if (evt.takeProfit === undefined) {
+      this.positionTracker.clearTakeProfit(this.riskSymbol);
+    } else {
+      this.positionTracker.setTakeProfit(this.riskSymbol, evt.takeProfit);
+    }
+
+    this.showRiskModal = false;
   }
 
   /** Active positions stream (array for *ngFor) */

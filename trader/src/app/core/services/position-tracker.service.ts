@@ -167,6 +167,27 @@ export class PositionTrackerService {
       this.saveToStorage();
     }
   }
+  clearStopLoss(symbol: string): void {
+    const positions = this.activePositions.value;
+    const position = positions.get(symbol);
+    if (!position) return;
+
+    delete position.stopLoss;
+    positions.set(symbol, position);
+    this.activePositions.next(positions);
+    this.saveToStorage();
+  }
+
+  clearTakeProfit(symbol: string): void {
+    const positions = this.activePositions.value;
+    const position = positions.get(symbol);
+    if (!position) return;
+
+    delete position.takeProfit;
+    positions.set(symbol, position);
+    this.activePositions.next(positions);
+    this.saveToStorage();
+  }
 
   // Observables
   getActivePositions(): Observable<Map<string, Position>> {

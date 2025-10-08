@@ -22,6 +22,7 @@ import { PositionTrackerService } from '../../services/position-tracker.service'
 import { TRADING_SYMBOLS } from '../../constants/symbols.constant';
 import { CommonModule } from '@angular/common';
 import { TradeEntryModalComponent } from '../trade-entry-modal/trade-entry-modal';
+import { ClosePositionModalComponent } from '../close-position-modal/close-position-modal';
 
 interface WatchlistItem {
   symbol: string;
@@ -36,7 +37,7 @@ interface WatchlistItem {
 @Component({
   selector: 'app-watchlist',
   standalone: true,
-  imports: [CommonModule, ReplacePipe, TradeEntryModalComponent],
+  imports: [CommonModule, ReplacePipe, TradeEntryModalComponent, ClosePositionModalComponent],
   templateUrl: './watchlist.html',
   styleUrls: ['./watchlist.scss'],
 })
@@ -68,6 +69,30 @@ export class WatchlistComponent implements OnInit, OnDestroy {
   openRecordTrade(symbol: string) {
     this.modalSymbol.set(symbol);
     this.showTradeModal.set(true);
+  }
+  // --- Close position modal state ---
+  showCloseModal = signal(false);
+  closeSymbol = signal<string | null>(null);
+
+  openClosePosition(symbol: string) {
+    this.closeSymbol.set(symbol);
+    this.showCloseModal.set(true);
+  }
+
+  cancelClosePosition() {
+    this.showCloseModal.set(false);
+  }
+
+  saveClosePosition(exitPrice: number) {
+    const sym = this.closeSymbol();
+    if (!sym) return;
+    this.positionTracker.closePosition(sym, exitPrice, 'manual');
+    this.showCloseModal.set(false);
+  }
+
+  // Helper for template conditionals (keeps HTML clean)
+  hasPosition(sym: string): boolean {
+    return this.positionTracker.hasPosition(sym);
   }
 
   // Handle save from the modal → create a position with your *actual* fill

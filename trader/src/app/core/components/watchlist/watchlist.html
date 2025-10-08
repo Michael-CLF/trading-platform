@@ -97,6 +97,11 @@
             <button class="position-toggle" (click)="openRecordTrade(item.symbol)" [title]="'Record Trade'">
                 +
             </button>
+            <button *ngIf="hasPosition(item.symbol)" class="position-toggle" (click)="openClosePosition(item.symbol)"
+                title="Close Position">
+                ✕
+            </button>
+
 
 
         </div>
@@ -114,5 +119,9 @@
     <app-trade-entry-modal *ngIf="showTradeModal()" [symbol]="modalSymbol()" (cancel)="showTradeModal.set(false)"
         (save)="onRecordTrade($event)">
     </app-trade-entry-modal>
+    <app-close-position-modal *ngIf="showCloseModal()" [symbol]="closeSymbol() || ''" (cancel)="cancelClosePosition()"
+        (save)="saveClosePosition($event)">
+    </app-close-position-modal>
+
 
 </div>

@@ -48,16 +48,25 @@
     <ng-container *ngIf="positions$ | async as positions; else noPos">
         <table class="tbl" *ngIf="positions.length; else noPos">
             <thead>
-                <tr>
-                    <th>Symbol</th>
-                    <th>Qty</th>
-                    <th>Avg Price</th>
-                    <th>Last</th>
-                    <th>Cost Basis</th>
-                    <th>Market Value</th>
-                    <th>P/L</th>
-                    <th>P/L %</th>
-                </tr>
+                <thead>
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Qty</th>
+                            <th>Avg Price</th>
+                            <th>Last</th>
+                            <th>Cost Basis</th>
+                            <th>Market Value</th>
+                            <th>P/L</th>
+                            <th>P/L %</th>
+                            <th>SL</th>
+                            <th>TP</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+
+                </thead>
+
             </thead>
             <tbody>
                 <tr *ngFor="let p of positions">
@@ -73,7 +82,14 @@
                     <td [class.pos]="(p.unrealizedPnL ?? 0) >= 0" [class.neg]="(p.unrealizedPnL ?? 0) < 0">
                         {{ (p.unrealizedPnLPercent ?? 0) / 100 | percent:'1.1-2' }}
                     </td>
+                    <td>{{ p.stopLoss != null ? (p.stopLoss | currency:'USD':'symbol':'1.2-2') : '—' }}</td>
+                    <td>{{ p.takeProfit != null ? (p.takeProfit | currency:'USD':'symbol':'1.2-2') : '—' }}</td>
+                    <td class="row-actions">
+                        <button class="btn btn-small" (click)="openRiskModal(p)">SL/TP</button>
+                        <button class="btn btn-small btn-danger" (click)="openCloseModal(p.symbol)">Close</button>
+                    </td>
                 </tr>
+
 
             </tbody>
         </table>
@@ -92,3 +108,7 @@
 <app-close-position-modal *ngIf="showCloseModal" [symbol]="closeSymbol || ''" (cancel)="cancelCloseModal()"
     (save)="saveCloseModal($event)">
 </app-close-position-modal>
+
+<app-edit-risk-modal *ngIf="showRiskModal" [symbol]="riskSymbol || ''" [stopLoss]="riskStopLoss"
+    [takeProfit]="riskTakeProfit" (cancel)="cancelRiskModal()" (save)="saveRiskModal($event)">
+</app-edit-risk-modal>
