@@ -1,0 +1,26 @@
+<div class="overlay" (click)="onCancel()"></div>
+<div class="modal" (click)="$event.stopPropagation()">
+    <h3 class="title">Record Trade</h3>
+
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+        <div class="row">
+            <label>Symbol</label>
+            <input formControlName="symbol" placeholder="NVDA" />
+        </div>
+
+        <div class="row">
+            <label>Quantity</label>
+            <input type="number" step="any" formControlName="quantity" />
+        </div>
+
+        <div class="row">
+            <label>Price</label>
+            <input type="number" step="any" formControlName="price" />
+        </div>
+
+        <div class="actions">
+            <button type="button" class="btn" (click)="onCancel()">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="form.invalid">Save</button>
+        </div>
+    </form>
+</div>

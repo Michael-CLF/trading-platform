@@ -21,6 +21,7 @@ import { ReplacePipe } from '../../shared/pipes/replace.pipe';
 import { PositionTrackerService } from '../../services/position-tracker.service';
 import { TRADING_SYMBOLS } from '../../constants/symbols.constant';
 import { CommonModule } from '@angular/common';
+import { TradeEntryModalComponent } from '../trade-entry-modal/trade-entry-modal';
 
 interface WatchlistItem {
   symbol: string;
@@ -35,7 +36,7 @@ interface WatchlistItem {
 @Component({
   selector: 'app-watchlist',
   standalone: true,
-  imports: [CommonModule, ReplacePipe],
+  imports: [CommonModule, ReplacePipe, TradeEntryModalComponent],
   templateUrl: './watchlist.html',
   styleUrls: ['./watchlist.scss'],
 })
@@ -59,6 +60,38 @@ export class WatchlistComponent implements OnInit, OnDestroy {
   isUpdating = signal(false);
   lastGlobalUpdate = signal<Date | null>(null);
   activePositions = signal<Set<string>>(new Set());
+  // --- Trade entry modal state ---
+  showTradeModal = signal(false);
+  modalSymbol = signal<string | null>(null);
+
+  // Open the modal with the selected symbol
+  openRecordTrade(symbol: string) {
+    this.modalSymbol.set(symbol);
+    this.showTradeModal.set(true);
+  }
+
+  // Handle save from the modal → create a position with your *actual* fill
+  async onRecordTrade(evt: { symbol: string; quantity: number; price: number }) {
+    const { symbol, quantity, price } = evt;
+
+    // Use your existing tracker to create/open a position
+    this.positionTracker.openPosition({
+      symbol,
+      entryPrice: price,
+      entryTime: new Date(),
+      quantity,
+      side: 'long',
+    });
+
+    // Fetch one fresh quote so P/L is visible immediately
+    try {
+      const q = await firstValueFrom(this.market.getQuote(symbol));
+      this.positionTracker.updatePositionPrice(symbol, q.price);
+    } catch {}
+
+    // Close modal
+    this.showTradeModal.set(false);
+  }
 
   private updateSub?: Subscription;
   private signalSub?: Subscription;

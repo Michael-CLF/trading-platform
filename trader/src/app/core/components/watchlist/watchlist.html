@@ -94,10 +94,11 @@
                 <span class="spinner"></span>
             </div>
 
-            <button class="position-toggle" (click)="togglePosition(item.symbol)"
-                [title]="activePositions().has(item.symbol) ? 'Close Position' : 'Open Position'">
-                {{ activePositions().has(item.symbol) ? '✕' : '+' }}
+            <button class="position-toggle" (click)="openRecordTrade(item.symbol)" [title]="'Record Trade'">
+                +
             </button>
+
+
         </div>
     </div>
 
@@ -110,4 +111,8 @@
             <span class="legend-item strong-sell">Strong Sell</span>
         </div>
     </footer>
+    <app-trade-entry-modal *ngIf="showTradeModal()" [symbol]="modalSymbol()" (cancel)="showTradeModal.set(false)"
+        (save)="onRecordTrade($event)">
+    </app-trade-entry-modal>
+
 </div>
