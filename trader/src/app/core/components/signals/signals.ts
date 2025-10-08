@@ -59,14 +59,15 @@ export class SignalsComponent implements OnInit, OnDestroy {
   readonly chartInfo = signal<ChartInfo | null>(null);
   readonly tradeSignals = signal<TradeSignal[]>([]);
 
-  // Chart geometry configuration - UPDATED SIZES
-  readonly viewW = 1400; // Increased width
-  readonly viewH = 600; // Increased height
-  readonly padLeft = 68;
-  readonly padRight = 68; // Increased for symmetry
-  readonly padTop = 40; // Increased for symbol display
-  readonly padBottom = 30;
+  // Chart geometry configuration - MAXIMIZED SIZES
+  readonly viewW = 1900; // Increased width for fuller screen
+  readonly viewH = 800; // Increased height to include time labels
+  readonly padLeft = 40; // Reduced padding
+  readonly padRight = 40; // Reduced padding
+  readonly padTop = 30; // Reduced top padding
+  readonly padBottom = 40; // Increased for time labels inside frame
   private _bodyW = 8;
+  readonly chartHeight = this.viewH + 'px';
 
   // Theme colors
   readonly activePillColor = '#adff2f';
@@ -105,9 +106,6 @@ export class SignalsComponent implements OnInit, OnDestroy {
   private pollSubscription?: Subscription;
   private quoteSubscription?: Subscription;
   private strategySubscription?: Subscription;
-
-  // Chart configuration
-  readonly chartHeight = '600px'; // Match viewH
 
   ngOnInit(): void {
     // Component is ready - user will click to select symbols

@@ -1,29 +1,29 @@
 :host {
   /* Theme */
   --chrome-offset: 200px;
-  --candle-up-body: #53d769;
-  --candle-up-wick: #86efac;
-  --candle-down-body: #ff3b30;
+  --candle-up-body: #adff2f;
+  --candle-up-wick: #adff2f;
+  --candle-down-body: #c00000;
   --candle-down-wick: #ff7a70;
 
   --live-line: #60a5fa;
-  --live-badge-bg: #1f2937;
-  --live-badge-fg: #cfe1ff;
+  --live-badge-bg: #024a70;
+  --live-badge-fg: #ffffff;
 
   // BUY/SELL signal colors are defined here
-  --buy-guide: #16a34a; // Green color for BUY signals
+  --buy-guide: #96badd; // Light blue color for BUY signals
   --sell-guide: #dc2626; // Red color for SELL signals
-  --buy-badge-bg: #16a34a; // Green background for BUY badge
-  --sell-badge-bg: #dc2626; // Red background for SELL badge
+  --buy-badge-bg: #06402b; // Green background for BUY badge
+  --sell-badge-bg: #c00000; // Red background for SELL badge
   --badge-fg: #08120a;
 
   /* Pills (you can override these from TS if you want) */
   --pill-active-bg: #adff2f;
   --pill-active-fg: #0b1220;
-  --pill-active-border: #60a5fa;
+  --pill-active-border: #c00000;
 
   /* Chart frame styling */
-  --chart-frame-border: #60a5fa; // Blue border color
+  --chart-frame-border: #adff2f; // Lime green border color
   --chart-frame-bg: rgba(2, 6, 23, 0.35); // Slight background tint
 
   /* Wrapper frame (contained mode only) */
@@ -31,7 +31,7 @@
   --wrap-bg: rgba(2, 6, 23, 0.35);
 
   /* Chart sizing */
-  --chart-height: 680px; /* or e.g. 70vh */
+  --chart-height: 800px; /* or e.g. 70vh */
   --chart-vertical-offset: 150px; /* used in .chart--vh variant below */
 }
 
@@ -57,7 +57,7 @@
 .toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
   margin: 20px auto;
 }
@@ -68,8 +68,15 @@
 .pill:hover {
   background-color: greenyellow;
 }
-.pill:focus {
-  outline: none;
+.pill:active {
+  background-color: #adff2f;
+}
+.pill.active,
+.pill.active:hover {
+  background: var(--pill-active-bg, #adff2f) !important;
+  color: var(--pill-active-fg, #0b1220) !important;
+  border-color: var(--pill-active-border, #60a5fa) !important;
+  font-weight: 600 !important;
 }
 
 .sym {
@@ -104,7 +111,14 @@
 .sym:hover > span.active {
   background: var(--pill-active-bg, #adff2f) !important;
   color: var(--pill-active-fg, #0b1220) !important;
-  border-color: var(--pill-active-border, #60a5fa) !important;
+  border-color: var(--pill-active-border, #c00000) !important;
+  font-weight: 600 !important;
+  opacity: 1 !important;
+}
+.sym:has(input:checked) > span {
+  background: var(--pill-active-bg, #adff2f) !important;
+  color: var(--pill-active-fg, #0b1220) !important;
+  border-color: var(--pill-active-border, #c00000) !important;
   font-weight: 600 !important;
   opacity: 1 !important;
 }
@@ -114,16 +128,14 @@
   position: relative;
 }
 
-/* Contained, centered with optional border/background */
+/* Contained, centered with border - FIXED FOR FULL WIDTH */
 .lc-canvas-wrap.contained {
-  max-width: 1440px; // Maximum width for large screens
-  width: 95%; // Responsive width
-  margin: 2rem auto; // Center with vertical spacing
-  border: 2px solid var(--chart-frame-border);
-  border-radius: 0.75rem;
-  padding: 1rem;
-  background: var(--wrap-bg);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  max-width: 100%; // Full width
+  width: 98%; // Nearly full width
+  margin: 0.5rem auto; // Minimal vertical spacing
+  padding: 0; // Remove padding
+  background: transparent;
+  box-shadow: none;
 }
 
 /* Full-bleed, edge-to-edge (no frame) */
@@ -136,22 +148,11 @@
   padding: 0;
 }
 
-/* Chart sizing */
+/* Chart sizing - FIXED */
 .lc-chart {
-  width: 100%;
-  height: 600px; // Fixed height for consistency
+  width: 95%; // Full container width
   display: block;
-  margin: 0 auto; // Center the SVG
-}
-.lc-canvas,
-.lc-chart {
-  display: block;
-  width: 100%;
-  height: calc(100vh - var(--chrome-offset));
-}
-/* If you prefer viewport height, add class "chart--vh" to <svg> */
-.lc-chart.chart--vh {
-  height: calc(100vh - var(--chart-vertical-offset));
+  margin: 0 auto;
 }
 
 /* Chart visuals */
@@ -166,18 +167,20 @@
   stroke: transparent;
 }
 
-// Visible border variant
+// Visible border variant - ENHANCED
 .chart-frame--visible {
-  fill: var(--chart-frame-bg);
-  stroke: var(--chart-frame-border);
-  stroke-width: 2;
+  fill: transparent; // Keep transparent background
+  stroke: #adff2f; // Use the lime green border
+  stroke-width: 3; // Make border more visible
   stroke-dasharray: none; // Solid border
   opacity: 1;
+  rx: 8; // Rounded corners
+  ry: 8;
 }
 
 // Symbol text inside the chart
 .chart-symbol {
-  fill: #60a5fa; // Blue color to match the border
+  fill: #60a5fa; // Blue color to match theme
   font-size: 18px;
   font-weight: 700;
   opacity: 0.9;
@@ -191,11 +194,8 @@
   opacity: 0.26;
 }
 .t-label {
-  fill: rgba(148, 163, 184, 0.78);
-  font:
-    11px ui-sans-serif,
-    system-ui;
-  text-anchor: middle;
+  fill: #96badd;
+  font: 18px;
 }
 .baseline {
   stroke: #cbd5e1;
@@ -209,10 +209,10 @@
 }
 .live-badge {
   fill: var(--live-badge-bg);
+  font: 16px system-ui;
 }
 .live-badge-text {
   fill: var(--live-badge-fg);
-  font: 12px system-ui;
 }
 
 // BUY/SELL badges styling
@@ -224,7 +224,7 @@
 }
 .badge-text {
   fill: #fff;
-  font: 600 12px system-ui;
+  font: 600 16px system-ui;
 }
 
 // Signal guide lines (vertical dashed lines)
@@ -267,7 +267,7 @@
   }
 }
 
-/* Overlays */
+/* Overlays - ENHANCED CORNER SYMBOL */
 .corner-symbol {
   position: absolute;
   top: 20px;
@@ -281,6 +281,7 @@
   letter-spacing: 0.1em;
   z-index: 15; // Ensure it's above other elements
 }
+
 .chart-info-panel {
   position: absolute;
   top: 0.75rem;
