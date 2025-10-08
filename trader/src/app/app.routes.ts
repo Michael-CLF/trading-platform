@@ -14,12 +14,6 @@ export const routes: Routes = [
         data: { title: 'Dashboard' },
       },
       {
-        path: 'positions',
-        loadComponent: () =>
-          import('./core/components/positions/positions').then((m) => m.PositionsComponent),
-        data: { title: 'Positions' },
-      },
-      {
         path: 'backtests',
         loadComponent: () =>
           import('./core/components/backtests/backtests').then((m) => m.BacktestsComponent),
@@ -30,10 +24,6 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./core/components/signals/signals').then((m) => m.SignalsComponent),
         data: { title: 'Signals' },
-      },
-      {
-        path: 'tracker',
-        loadComponent: () => import('./core/components/tracker/tracker').then((m) => m.Tracker),
       },
       {
         path: 'watchlist',
