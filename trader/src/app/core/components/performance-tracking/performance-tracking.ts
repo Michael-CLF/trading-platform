@@ -1,189 +1,135 @@
-// src/app/components/performance-dashboard/performance-dashboard.ts
-import { Component, OnInit, signal, computed, inject } from '@angular/core';
+import { Component, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Observable, Subscription, timer, of, firstValueFrom } from 'rxjs';
+import { map, switchMap } from 'rxjs/operators';
+
 import {
   PositionTrackerService,
   Position,
-  ClosedPosition,
   PerformanceMetrics,
 } from '../../services/position-tracker.service';
-import { AlertSystemService, Alert } from '../../services/alert-system.service';
+import { MarketDataService } from '../../services/market-data.service';
+import { TradeEntryModalComponent } from '../../components/trade-entry-modal/trade-entry-modal';
+import { ClosePositionModalComponent } from '../close-position-modal/close-position-modal';
 
 @Component({
   selector: 'app-performance-tracking',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TradeEntryModalComponent, ClosePositionModalComponent],
   templateUrl: './performance-tracking.html',
-  styleUrls: ['./performance-tracking.scss'],
 })
-export class PerformanceTrackingComponent implements OnInit {
-  private positionTracker = inject(PositionTrackerService);
-  private alertSystem = inject(AlertSystemService);
+export class PerformanceTrackingComponent implements OnDestroy {
+  /** Modal state */
+  showTradeModal = false;
+  modalSymbol: string | null = null;
+  // Close position modal
+  showCloseModal = false;
+  closeSymbol: string | null = null;
 
-  // State
-  activePositions = signal<Position[]>([]);
-  closedPositions = signal<ClosedPosition[]>([]);
-  metrics = signal<PerformanceMetrics | null>(null);
-  recentAlerts = signal<Alert[]>([]);
-
-  // View toggles
-  showPositions = signal(true);
-  showHistory = signal(false);
-  showMetrics = signal(true);
-  showAlerts = signal(true);
-
-  // Computed values
-  totalUnrealizedPnL = computed(() => {
-    return this.activePositions().reduce((sum, p) => sum + (p.unrealizedPnL || 0), 0);
-  });
-
-  totalRealizedPnL = computed(() => {
-    return this.closedPositions().reduce((sum, p) => sum + p.realizedPnL, 0);
-  });
-
-  todaysPnL = computed(() => {
-    const today = new Date().toDateString();
-    const todaysClosed = this.closedPositions().filter((p) => p.exitTime.toDateString() === today);
-    return todaysClosed.reduce((sum, p) => sum + p.realizedPnL, 0);
-  });
-
-  bestPerformers = computed(() => {
-    return [...this.closedPositions()]
-      .sort((a, b) => b.realizedPnLPercent - a.realizedPnLPercent)
-      .slice(0, 5);
-  });
-
-  worstPerformers = computed(() => {
-    return [...this.closedPositions()]
-      .sort((a, b) => a.realizedPnLPercent - b.realizedPnLPercent)
-      .slice(0, 5);
-  });
-
-  ngOnInit(): void {
-    // Subscribe to position data
-    this.positionTracker.getActivePositions().subscribe((positions) => {
-      this.activePositions.set(Array.from(positions.values()));
-    });
-
-    this.positionTracker.getPositionHistory().subscribe((history) => {
-      this.closedPositions.set(history);
-    });
-
-    this.positionTracker.getPerformanceMetrics().subscribe((metrics) => {
-      this.metrics.set(metrics);
-    });
-
-    // Subscribe to alerts
-    this.alertSystem.getAlerts().subscribe((alerts) => {
-      this.recentAlerts.set(alerts.slice(0, 10));
-    });
+  openCloseModal(symbol: string) {
+    this.closeSymbol = symbol;
+    this.showCloseModal = true;
+  }
+  cancelCloseModal() {
+    this.showCloseModal = false;
+  }
+  saveCloseModal(exitPrice: number) {
+    if (!this.closeSymbol) return;
+    this.positionTracker.closePosition(this.closeSymbol, exitPrice, 'manual');
+    this.showCloseModal = false;
   }
 
-  // Position management
-  closePosition(position: Position): void {
-    if (confirm(`Close position for ${position.symbol}?`)) {
-      this.positionTracker.closePosition(
-        position.symbol,
-        position.currentPrice || position.entryPrice,
-        'manual',
-      );
+  /** Active positions stream (array for *ngFor) */
+  positions$!: Observable<Position[]>;
+  /** Realized-performance metrics stream */
+  metrics$!: Observable<PerformanceMetrics>;
+
+  /** 15-minute price refresh subscription */
+  private refreshSub?: Subscription;
+
+  constructor(
+    private positionTracker: PositionTrackerService,
+    private marketData: MarketDataService,
+  ) {
+    // Metrics stream (realized performance)
+    this.metrics$ = this.positionTracker.getPerformanceMetrics();
+
+    // Initialize positions$ AFTER DI is available
+    this.positions$ = this.positionTracker
+      .getActivePositions()
+      .pipe(map((mapObj) => Array.from(mapObj.values())));
+
+    // Start a 15-minute refresh loop (immediate first tick)
+    this.refreshSub = timer(0, 15 * 60 * 1000)
+      .pipe(
+        switchMap(() =>
+          this.positionTracker.getActivePositions().pipe(map((m) => Array.from(m.keys()))),
+        ),
+        switchMap((symbols) =>
+          symbols.length ? this.marketData.getMultipleQuotes(symbols) : of([]),
+        ),
+      )
+      .subscribe((quotes) => {
+        for (const q of quotes) {
+          this.positionTracker.updatePositionPrice(q.symbol, q.price);
+        }
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.refreshSub?.unsubscribe();
+  }
+
+  /** UI actions */
+  openManualTrade(symbol?: string) {
+    this.modalSymbol = symbol ?? null;
+    this.showTradeModal = true;
+  }
+
+  cancelManualTrade() {
+    this.showTradeModal = false;
+  }
+
+  async saveManualTrade(evt: { symbol: string; quantity: number; price: number }) {
+    const { symbol, quantity, price } = evt;
+
+    // Create/open the position with the actual fill
+    this.positionTracker.openPosition({
+      symbol,
+      entryPrice: price,
+      entryTime: new Date(),
+      quantity,
+      side: 'long',
+    });
+
+    // Immediate quote so P/L is visible right away
+    try {
+      const q = await firstValueFrom(this.marketData.getQuote(symbol));
+      this.positionTracker.updatePositionPrice(symbol, q.price);
+    } catch {
+      // ignore transient quote error; 15-minute loop will refresh later
+    }
+
+    this.showTradeModal = false;
+  }
+
+  /** Manual refresh button */
+  async refreshNow() {
+    const mapObj = await firstValueFrom(this.positionTracker.getActivePositions());
+    const symbols = Array.from(mapObj.keys());
+    if (!symbols.length) return;
+
+    try {
+      const quotes = await firstValueFrom(this.marketData.getMultipleQuotes(symbols));
+      for (const q of quotes) {
+        this.positionTracker.updatePositionPrice(q.symbol, q.price);
+      }
+    } catch {
+      // ignore transient errors
     }
   }
 
-  updateStopLoss(position: Position, event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const newStopLoss = parseFloat(input.value);
-    if (!isNaN(newStopLoss) && newStopLoss > 0) {
-      this.positionTracker.setStopLoss(position.symbol, newStopLoss);
-    }
-  }
-
-  updateTakeProfit(position: Position, event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const newTakeProfit = parseFloat(input.value);
-    if (!isNaN(newTakeProfit) && newTakeProfit > 0) {
-      this.positionTracker.setTakeProfit(position.symbol, newTakeProfit);
-    }
-  }
-
-  // Alert management
-  markAlertAsRead(alertId: string): void {
-    this.alertSystem.markAsRead(alertId);
-  }
-
-  clearAllAlerts(): void {
-    if (confirm('Clear all alerts?')) {
-      this.alertSystem.clearAlerts();
-    }
-  }
-
-  // Data management
-  exportData(): void {
-    const data = {
-      activePositions: this.activePositions(),
-      closedPositions: this.closedPositions(),
-      metrics: this.metrics(),
-      exportDate: new Date().toISOString(),
-    };
-
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `trading-data-${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  clearAllData(): void {
+  clearAll() {
     this.positionTracker.clearAllData();
-  }
-
-  // Utility methods
-  formatCurrency(value: number): string {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(value);
-  }
-
-  formatPercent(value: number): string {
-    return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
-  }
-
-  formatDate(date: Date): string {
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date);
-  }
-
-  getPositionDuration(position: ClosedPosition): string {
-    const hours = Math.floor(position.holdingPeriod / 60);
-    const minutes = position.holdingPeriod % 60;
-    return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-  }
-
-  getPnLClass(value: number): string {
-    if (value > 0) return 'positive';
-    if (value < 0) return 'negative';
-    return 'neutral';
-  }
-
-  getAlertIcon(type: string): string {
-    switch (type) {
-      case 'signal':
-        return '📊';
-      case 'position':
-        return '💼';
-      case 'price':
-        return '💰';
-      case 'system':
-        return '⚙️';
-      default:
-        return '📌';
-    }
   }
 }

@@ -1,0 +1,18 @@
+<div class="overlay" (click)="onCancel()"></div>
+<div class="modal" (click)="$event.stopPropagation()">
+    <h3 class="title">Close Position</h3>
+
+    <div class="sym">Symbol: <strong>{{ symbol }}</strong></div>
+
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+        <div class="row">
+            <label>Exit Price</label>
+            <input type="number" step="any" formControlName="exitPrice" />
+        </div>
+
+        <div class="actions">
+            <button type="button" class="btn" (click)="onCancel()">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="form.invalid">Close</button>
+        </div>
+    </form>
+</div>

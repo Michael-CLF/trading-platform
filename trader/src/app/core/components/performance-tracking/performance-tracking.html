@@ -1,243 +1,94 @@
-<!-- src/app/components/performance-dashboard/performance-dashboard.html -->
-<div class="performance-dashboard">
-    <header class="dashboard-header">
-        <h1>Trading Performance</h1>
-        <div class="header-actions">
-            <button class="btn-secondary" (click)="exportData()">Export Data</button>
-            <button class="btn-danger" (click)="clearAllData()">Clear All</button>
-        </div>
-    </header>
+<section class="perf-header">
+    <h2>Trading Performance</h2>
 
-    <!-- Summary Cards -->
-    <div class="summary-grid">
-        <div class="summary-card">
-            <span class="label">Total P&L</span>
-            <span class="value" [class]="getPnLClass(totalRealizedPnL())">
-                {{ formatCurrency(totalRealizedPnL()) }}
-            </span>
-        </div>
+    <div class="actions">
+        <button class="btn" (click)="openManualTrade()">Add Trade</button>
+        <button class="btn" (click)="refreshNow()">Refresh</button>
+        <button class="btn btn-danger" (click)="clearAll()">Clear All</button>
+    </div>
+</section>
 
-        <div class="summary-card">
-            <span class="label">Today's P&L</span>
-            <span class="value" [class]="getPnLClass(todaysPnL())">
-                {{ formatCurrency(todaysPnL()) }}
-            </span>
-        </div>
-
-        <div class="summary-card">
-            <span class="label">Unrealized P&L</span>
-            <span class="value" [class]="getPnLClass(totalUnrealizedPnL())">
-                {{ formatCurrency(totalUnrealizedPnL()) }}
-            </span>
-        </div>
-
-        <div class="summary-card" *ngIf="metrics()">
-            <span class="label">Win Rate</span>
-            <span class="value">{{ metrics()!.winRate.toFixed(1) }}%</span>
-        </div>
+<!-- Realized-performance summary cards -->
+<section class="cards" *ngIf="metrics$ | async as m">
+    <div class="card">
+        <div class="card-title">Total P&L (Realized)</div>
+        <div class="card-value">{{ m.totalPnL | currency:'USD':'symbol':'1.2-2' }}</div>
     </div>
 
-    <!-- Active Positions -->
-    <section class="dashboard-section" *ngIf="showPositions()">
-        <div class="section-header">
-            <h2>Active Positions ({{ activePositions().length }})</h2>
-            <button class="toggle-btn" (click)="showPositions.set(!showPositions())">
-                {{ showPositions() ? 'Hide' : 'Show' }}
-            </button>
-        </div>
+    <div class="card">
+        <div class="card-title">Win Rate</div>
+        <div class="card-value">{{ m.winRate / 100 | percent:'1.0-1' }}</div>
+    </div>
 
-        <div class="positions-table" *ngIf="activePositions().length > 0">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Symbol</th>
-                        <th>Entry Price</th>
-                        <th>Current Price</th>
-                        <th>Quantity</th>
-                        <th>Unrealized P&L</th>
-                        <th>Stop Loss</th>
-                        <th>Take Profit</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr *ngFor="let position of activePositions()">
-                        <td class="symbol">{{ position.symbol }}</td>
-                        <td>{{ formatCurrency(position.entryPrice) }}</td>
-                        <td>{{ formatCurrency(position.currentPrice || position.entryPrice) }}</td>
-                        <td>{{ position.quantity }}</td>
-                        <td [class]="getPnLClass(position.unrealizedPnL || 0)">
-                            {{ formatCurrency(position.unrealizedPnL || 0) }}
-                            <span class="pnl-percent">
-                                ({{ formatPercent(position.unrealizedPnLPercent || 0) }})
-                            </span>
-                        </td>
-                        <td>
-                            <input type="number" class="editable-field" [value]="position.stopLoss || ''"
-                                (blur)="updateStopLoss(position, $event)" placeholder="Set SL">
-                        </td>
-                        <td>
-                            <input type="number" class="editable-field" [value]="position.takeProfit || ''"
-                                (blur)="updateTakeProfit(position, $event)" placeholder="Set TP">
-                        </td>
-                        <td>
-                            <button class="btn-close" (click)="closePosition(position)">Close</button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+    <div class="card">
+        <div class="card-title">Avg Win</div>
+        <div class="card-value">{{ m.averageWin | currency:'USD':'symbol':'1.2-2' }}</div>
+    </div>
 
-        <div class="empty-state" *ngIf="activePositions().length === 0">
-            No active positions
-        </div>
-    </section>
+    <div class="card">
+        <div class="card-title">Avg Loss</div>
+        <div class="card-value">{{ -m.averageLoss | currency:'USD':'symbol':'1.2-2' }}</div>
+    </div>
 
-    <!-- Performance Metrics -->
-    <section class="dashboard-section" *ngIf="showMetrics() && metrics()">
-        <div class="section-header">
-            <h2>Performance Metrics</h2>
-            <button class="toggle-btn" (click)="showMetrics.set(!showMetrics())">
-                {{ showMetrics() ? 'Hide' : 'Show' }}
-            </button>
-        </div>
+    <div class="card">
+        <div class="card-title">Profit Factor</div>
+        <div class="card-value">{{ m.profitFactor | number:'1.2-2' }}</div>
+    </div>
 
-        <div class="metrics-grid">
-            <div class="metric-item">
-                <span class="metric-label">Total Trades</span>
-                <span class="metric-value">{{ metrics()!.totalTrades }}</span>
-            </div>
+    <div class="card">
+        <div class="card-title">Max Drawdown</div>
+        <div class="card-value">{{ m.maxDrawdown | currency:'USD':'symbol':'1.2-2' }}</div>
+    </div>
+</section>
 
-            <div class="metric-item">
-                <span class="metric-label">Winning Trades</span>
-                <span class="metric-value positive">{{ metrics()!.winningTrades }}</span>
-            </div>
 
-            <div class="metric-item">
-                <span class="metric-label">Losing Trades</span>
-                <span class="metric-value negative">{{ metrics()!.losingTrades }}</span>
-            </div>
+<section class="panel">
+    <div class="panel-title">Active Positions</div>
 
-            <div class="metric-item">
-                <span class="metric-label">Average Win</span>
-                <span class="metric-value positive">{{ formatCurrency(metrics()!.averageWin) }}</span>
-            </div>
+    <ng-container *ngIf="positions$ | async as positions; else noPos">
+        <table class="tbl" *ngIf="positions.length; else noPos">
+            <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>Qty</th>
+                    <th>Avg Price</th>
+                    <th>Last</th>
+                    <th>Cost Basis</th>
+                    <th>Market Value</th>
+                    <th>P/L</th>
+                    <th>P/L %</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr *ngFor="let p of positions">
+                    <td class="sym">{{ p.symbol }}</td>
+                    <td>{{ p.quantity | number:'1.0-4' }}</td>
+                    <td>{{ p.entryPrice | currency:'USD':'symbol':'1.2-2' }}</td>
+                    <td>{{ p.currentPrice | currency:'USD':'symbol':'1.2-2' }}</td>
+                    <td>{{ (p.entryPrice * p.quantity) | currency:'USD':'symbol':'1.2-2' }}</td>
+                    <td>{{ ((p.currentPrice ?? 0) * p.quantity) | currency:'USD':'symbol':'1.2-2' }}</td>
+                    <td [class.pos]="(p.unrealizedPnL ?? 0) >= 0" [class.neg]="(p.unrealizedPnL ?? 0) < 0">
+                        {{ p.unrealizedPnL | currency:'USD':'symbol':'1.2-2' }}
+                    </td>
+                    <td [class.pos]="(p.unrealizedPnL ?? 0) >= 0" [class.neg]="(p.unrealizedPnL ?? 0) < 0">
+                        {{ (p.unrealizedPnLPercent ?? 0) / 100 | percent:'1.1-2' }}
+                    </td>
+                </tr>
 
-            <div class="metric-item">
-                <span class="metric-label">Average Loss</span>
-                <span class="metric-value negative">{{ formatCurrency(metrics()!.averageLoss) }}</span>
-            </div>
+            </tbody>
+        </table>
+    </ng-container>
 
-            <div class="metric-item">
-                <span class="metric-label">Profit Factor</span>
-                <span class="metric-value">{{ metrics()!.profitFactor.toFixed(2) }}</span>
-            </div>
+    <ng-template #noPos>
+        <div class="empty">No active positions</div>
+    </ng-template>
+</section>
 
-            <div class="metric-item">
-                <span class="metric-label">Sharpe Ratio</span>
-                <span class="metric-value">{{ metrics()!.sharpeRatio.toFixed(2) }}</span>
-            </div>
+<!-- Trade Entry Modal -->
+<app-trade-entry-modal *ngIf="showTradeModal" [symbol]="modalSymbol" (cancel)="cancelManualTrade()"
+    (save)="saveManualTrade($event)">
+</app-trade-entry-modal>
 
-            <div class="metric-item">
-                <span class="metric-label">Max Drawdown</span>
-                <span class="metric-value negative">{{ formatCurrency(metrics()!.maxDrawdown) }}</span>
-            </div>
-        </div>
-
-        <!-- Best and Worst Trades -->
-        <div class="trade-highlights">
-            <div class="highlight-card" *ngIf="metrics() && metrics()!.bestTrade">
-                <h3>Best Trade</h3>
-                <div class="trade-detail">
-                    <span>{{ metrics()!.bestTrade!.symbol }}</span>
-                    <span class="positive">{{ formatCurrency(metrics()!.bestTrade!.realizedPnL) }}</span>
-                    <span class="percent">{{ formatPercent(metrics()!.bestTrade!.realizedPnLPercent) }}</span>
-                </div>
-            </div>
-
-            <div class="highlight-card" *ngIf="metrics() && metrics()!.worstTrade">
-                <h3>Worst Trade</h3>
-                <div class="trade-detail">
-                    <span>{{ metrics()!.worstTrade!.symbol }}</span>
-                    <span class="negative">{{ formatCurrency(metrics()!.worstTrade!.realizedPnL) }}</span>
-                    <span class="percent">{{ formatPercent(metrics()!.worstTrade!.realizedPnLPercent) }}</span>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Recent Alerts -->
-    <section class="dashboard-section" *ngIf="showAlerts()">
-        <div class="section-header">
-            <h2>Recent Alerts</h2>
-            <div class="section-actions">
-                <button class="btn-text" (click)="clearAllAlerts()">Clear All</button>
-                <button class="toggle-btn" (click)="showAlerts.set(!showAlerts())">
-                    {{ showAlerts() ? 'Hide' : 'Show' }}
-                </button>
-            </div>
-        </div>
-
-        <div class="alerts-list" *ngIf="recentAlerts().length > 0">
-            <div class="alert-item" *ngFor="let alert of recentAlerts()" [class.unread]="!alert.read"
-                [class.high-priority]="alert.priority === 'high' || alert.priority === 'critical'"
-                (click)="markAlertAsRead(alert.id)">
-                <span class="alert-icon">{{ getAlertIcon(alert.type) }}</span>
-                <div class="alert-content">
-                    <div class="alert-title">{{ alert.title }}</div>
-                    <div class="alert-message">{{ alert.message }}</div>
-                    <div class="alert-time">{{ formatDate(alert.timestamp) }}</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="empty-state" *ngIf="recentAlerts().length === 0">
-            No recent alerts
-        </div>
-    </section>
-
-    <!-- Trade History -->
-    <section class="dashboard-section" *ngIf="showHistory()">
-        <div class="section-header">
-            <h2>Trade History (Last 20)</h2>
-            <button class="toggle-btn" (click)="showHistory.set(!showHistory())">
-                {{ showHistory() ? 'Hide' : 'Show' }}
-            </button>
-        </div>
-
-        <div class="history-table" *ngIf="closedPositions().length > 0">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Symbol</th>
-                        <th>Entry</th>
-                        <th>Exit</th>
-                        <th>Duration</th>
-                        <th>P&L</th>
-                        <th>Return</th>
-                        <th>Reason</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr *ngFor="let trade of closedPositions().slice(0, 20)">
-                        <td class="symbol">{{ trade.symbol }}</td>
-                        <td>{{ formatCurrency(trade.entryPrice) }}</td>
-                        <td>{{ formatCurrency(trade.exitPrice) }}</td>
-                        <td>{{ getPositionDuration(trade) }}</td>
-                        <td [class]="getPnLClass(trade.realizedPnL)">
-                            {{ formatCurrency(trade.realizedPnL) }}
-                        </td>
-                        <td [class]="getPnLClass(trade.realizedPnLPercent)">
-                            {{ formatPercent(trade.realizedPnLPercent) }}
-                        </td>
-                        <td class="exit-reason">{{ trade.exitReason }}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="empty-state" *ngIf="closedPositions().length === 0">
-            No trade history yet
-        </div>
-    </section>
-</div>
+<app-close-position-modal *ngIf="showCloseModal" [symbol]="closeSymbol || ''" (cancel)="cancelCloseModal()"
+    (save)="saveCloseModal($event)">
+</app-close-position-modal>
