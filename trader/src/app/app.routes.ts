@@ -37,6 +37,13 @@ export const routes: Routes = [
             (m) => m.PerformanceTrackingComponent,
           ),
       },
+      {
+        path: 'trade-history',
+        loadComponent: () =>
+          import('./core/components/trade-history/trade-history').then(
+            (m) => m.TradeHistoryComponent,
+          ),
+      },
     ],
   },
 
