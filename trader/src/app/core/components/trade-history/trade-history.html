@@ -9,46 +9,130 @@
 
     <div class="ranges">
         <button *ngFor="let r of ranges" class="range" [class.active]="selectedRange() === r.id"
-            (click)="selectRange(r.id)">
+            [disabled]="!selected() || loading()" (click)="$event.preventDefault(); selectRange(r.id)">
             {{ r.label }}
         </button>
+        <span *ngIf="loading()" class="loading-dot">Loading…</span>
     </div>
 </section>
 
-<!-- Empty state -->
-<section class="th-empty" *ngIf="!selected(); else chart">
-    <p>Select a symbol to view historical performance.</p>
+<!-- Statistics panel (shown when symbol is selected and data is loaded) -->
+<section class="th-stats" *ngIf="selected() && rangeStats() as stats">
+    <div class="stat-card">
+        <div class="stat-label">High</div>
+        <div class="stat-value">${{ stats.high.toFixed(2) }}</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">Low</div>
+        <div class="stat-value">${{ stats.low.toFixed(2) }}</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">Change</div>
+        <div class="stat-value" [class.positive]="stats.change >= 0" [class.negative]="stats.change < 0">
+            {{ stats.change >= 0 ? '+' : '' }}${{ stats.change.toFixed(2) }}
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">Change %</div>
+        <div class="stat-value" [class.positive]="stats.changePercent >= 0" [class.negative]="stats.changePercent < 0">
+            {{ stats.changePercent >= 0 ? '+' : '' }}{{ stats.changePercent.toFixed(2) }}%
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">Volume</div>
+        <div class="stat-value">{{ formatVolume(stats.volume) }}</div>
+    </div>
 </section>
 
-<ng-template #chart>
-    <svg class="th-chart" [attr.viewBox]="'0 0 ' + viewW + ' ' + viewH" [attr.width]="viewW" [attr.height]="viewH"
-        role="img" aria-label="Historical line chart">
+<!-- Empty state (no symbol selected) -->
+<section class="th-empty" *ngIf="!selected(); else chart">
+    <div class="empty-icon">📊</div>
+    <h3 class="empty-title">No Symbol Selected</h3>
+    <p class="empty-description">Select a symbol above to view its historical price performance and trading data.</p>
+</section>
 
-        <!-- frame -->
+<!-- Chart view (when symbol is selected) -->
+<ng-template #chart>
+    <!-- Loading overlay with skeleton animation -->
+    <div class="th-loading-overlay" *ngIf="loading()">
+        <div class="skeleton-chart">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+        </div>
+        <div class="loading-text">
+            <span class="loading-spinner"></span>
+            Loading {{ selected() }} data...
+        </div>
+    </div>
+
+    <!-- SVG Chart -->
+    <svg class="th-chart" [attr.viewBox]="'0 0 ' + viewW + ' ' + viewH" [attr.width]="viewW" [attr.height]="viewH"
+        role="img" aria-label="Historical line chart" (mousemove)="onChartMouseMove($event)"
+        (mouseleave)="onChartMouseLeave()">
+
+        <!-- Chart frame -->
         <rect [attr.x]="padLeft" [attr.y]="padTop" [attr.width]="innerW()" [attr.height]="innerH()" class="frame"
             rx="10" ry="10"></rect>
 
-        <!-- grid y -->
+        <!-- Y-axis grid lines -->
         <g class="grid-y">
             <line *ngFor="let t of yTicks()" [attr.x1]="padLeft" [attr.x2]="padLeft + innerW()" [attr.y1]="t.y"
                 [attr.y2]="t.y" />
         </g>
 
-        <!-- axis y labels -->
+        <!-- Y-axis price labels -->
         <g class="axis-y">
             <text *ngFor="let t of yTicks()" [attr.x]="padLeft - 8" [attr.y]="t.y + 4" text-anchor="end">
                 {{ t.label }}
             </text>
         </g>
 
-        <!-- the line -->
+        <!-- Gradient definition for area fill -->
+        <defs>
+            <linearGradient id="thArea" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.28" />
+                <stop offset="100%" stop-color="#60a5fa" stop-opacity="0.02" />
+            </linearGradient>
+        </defs>
+
+        <!-- Shaded area under the line -->
+        <path class="area" [attr.d]="areaPath()" fill="url(#thArea)"></path>
+
+        <!-- Price line -->
         <path class="series" [attr.d]="linePath()"></path>
 
-        <!-- x-axis labels -->
+        <!-- Crosshair (shown on hover) -->
+        <g class="crosshair" *ngIf="showTooltip() && crosshairX() !== null && crosshairY() !== null">
+            <!-- Vertical crosshair line -->
+            <line [attr.x1]="crosshairX()" [attr.y1]="padTop" [attr.x2]="crosshairX()" [attr.y2]="padTop + innerH()"
+                class="crosshair-line" />
+
+            <!-- Horizontal crosshair line -->
+            <line [attr.x1]="padLeft" [attr.y1]="crosshairY()" [attr.x2]="padLeft + innerW()" [attr.y2]="crosshairY()"
+                class="crosshair-line" />
+
+            <!-- Intersection point circle -->
+            <circle [attr.cx]="crosshairX()" [attr.cy]="crosshairY()" r="5" class="crosshair-point" />
+        </g>
+
+        <!-- X-axis date/time labels -->
         <g class="axis-x">
             <text *ngFor="let t of xTicks()" [attr.x]="t.x" [attr.y]="viewH - padBottom + 18" text-anchor="middle">
                 {{ t.label }}
             </text>
         </g>
     </svg>
+
+    <!-- Hover tooltip -->
+    <div class="th-tooltip" *ngIf="showTooltip() && tooltipData() as tip" [style.left.px]="tip.x + 10"
+        [style.top.px]="tip.y - 60">
+        <div class="tooltip-price">${{ tip.price.toFixed(2) }}</div>
+        <div class="tooltip-date">{{ tip.date }}</div>
+        <div class="tooltip-time" *ngIf="selectedRange() === '1D'">{{ tip.time }}</div>
+    </div>
 </ng-template>
