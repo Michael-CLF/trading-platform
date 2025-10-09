@@ -1,128 +1,94 @@
-.perf-header {
+/* Header/toolbars */
+.th-toolbar {
+  margin: 20px auto 18px;
+  width: 95%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 0 auto;
-  margin-top: 20px;
-  margin-bottom: 30px;
-  width: 70%;
-
-  h2 {
-    margin: 0;
-    font-weight: 600;
-    font-size: 1.5rem;
-  }
-
-  .actions {
-    display: flex;
-    gap: 8px;
-  }
-}
-
-.panel {
-  background: #0b1220;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 12px;
-  padding: 12px;
-  margin-bottom: 16px;
-  width: 95%;
-  margin: 0 auto;
-
-  .panel-title {
-    font-weight: 700;
-    margin-bottom: 8px;
-  }
-}
-
-.tbl {
-  width: 100%;
-  border-collapse: collapse;
-
-  th,
-  td {
-    text-align: left;
-    padding: 8px 10px;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-  }
-
-  .sym {
-    font-weight: 700;
-    letter-spacing: 0.02em;
-  }
-
-  .pos {
-    color: #53d769;
-    font-weight: 600;
-  }
-
-  .neg {
-    color: #ff3b30;
-    font-weight: 600;
-  }
-}
-
-.empty {
-  opacity: 0.6;
-  padding: 12px;
-}
-
-.btn {
-  background: #1f2937;
-  border: 1px solid #374151;
-  color: #e5e7eb;
-  border-radius: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-
-  &.btn-danger {
-    background: #7f1d1d;
-    border-color: #b91c1c;
-  }
-}
-.cards {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
-  margin: 0 auto;
+
+  .symbols,
+  .ranges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .pill,
+  .range {
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    background: #0b1220;
+    color: #e5e7eb;
+    cursor: pointer;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    transition:
+      transform 120ms ease,
+      background 120ms ease,
+      border-color 120ms ease;
+  }
+
+  .pill:hover,
+  .range:hover {
+    transform: translateY(-1px);
+    border-color: #60a5fa;
+  }
+
+  .pill.active,
+  .range.active {
+    background: #adff2f; /* lime-like accent you’ve used */
+    color: #0b1220;
+    border-color: #60a5fa;
+  }
+}
+
+/* Empty state */
+.th-empty {
   width: 95%;
-  margin-bottom: 40px;
-
-  @media (max-width: 1200px) {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  @media (max-width: 700px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  margin: 40px auto;
+  opacity: 0.7;
+  text-align: center;
 }
 
-.card {
-  background: #0b1220;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 12px;
-  padding: 12px;
-
-  .card-title {
-    font-size: 12px;
-    letter-spacing: 0.04em;
-    opacity: 0.7;
-    margin-bottom: 4px;
-  }
-
-  .card-value {
-    font-size: 18px;
-    font-weight: 700;
-  }
+/* SVG chart */
+.th-chart {
+  display: block;
+  margin: 0 auto 18px;
+  width: 95%;
 }
-.btn-small {
-  padding: 6px 10px;
+
+.frame {
+  fill: #0b1220;
+  stroke: #adff2f;
+  stroke-width: 3;
+}
+
+/* gridlines */
+.grid-y line {
+  stroke: rgba(148, 163, 184, 0.14);
+  stroke-dasharray: 2 4;
+}
+
+/* line series */
+.series {
+  fill: none;
+  stroke: #60a5fa; /* sky-500 */
+  stroke-width: 2.5;
+}
+
+/* axes */
+.axis-y text,
+.axis-x text {
+  fill: #cbd5e1; /* slate-300 */
   font-size: 12px;
 }
-.row-actions {
-  display: flex;
-  gap: 6px;
+
+.axis-y text {
+  dominant-baseline: middle;
 }
 
-.btn-small {
-  padding: 6px 10px;
-  font-size: 12px;
+.axis-x text {
+  dominant-baseline: hanging;
 }

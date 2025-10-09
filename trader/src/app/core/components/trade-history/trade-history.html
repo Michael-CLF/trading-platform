@@ -1,114 +1,54 @@
-<section class="perf-header">
-    <h2>Trading Performance</h2>
+<!-- src/app/core/components/trade-history/trade-history.html -->
 
-    <div class="actions">
-        <button class="btn" (click)="openManualTrade()">Add Trade</button>
-        <button class="btn" (click)="refreshNow()">Refresh</button>
-        <button class="btn btn-danger" (click)="clearAll()">Clear All</button>
+<section class="th-toolbar">
+    <div class="symbols">
+        <button *ngFor="let s of symbols" class="pill" [class.active]="selected() === s" (click)="selectSymbol(s)">
+            {{ s }}
+        </button>
+    </div>
+
+    <div class="ranges">
+        <button *ngFor="let r of ranges" class="range" [class.active]="selectedRange() === r.id"
+            (click)="selectRange(r.id)">
+            {{ r.label }}
+        </button>
     </div>
 </section>
 
-<!-- Realized-performance summary cards -->
-<section class="cards" *ngIf="metrics$ | async as m">
-    <div class="card">
-        <div class="card-title">Total P&L (Realized)</div>
-        <div class="card-value">{{ m.totalPnL | currency:'USD':'symbol':'1.2-2' }}</div>
-    </div>
-
-    <div class="card">
-        <div class="card-title">Win Rate</div>
-        <div class="card-value">{{ m.winRate / 100 | percent:'1.0-1' }}</div>
-    </div>
-
-    <div class="card">
-        <div class="card-title">Avg Win</div>
-        <div class="card-value">{{ m.averageWin | currency:'USD':'symbol':'1.2-2' }}</div>
-    </div>
-
-    <div class="card">
-        <div class="card-title">Avg Loss</div>
-        <div class="card-value">{{ -m.averageLoss | currency:'USD':'symbol':'1.2-2' }}</div>
-    </div>
-
-    <div class="card">
-        <div class="card-title">Profit Factor</div>
-        <div class="card-value">{{ m.profitFactor | number:'1.2-2' }}</div>
-    </div>
-
-    <div class="card">
-        <div class="card-title">Max Drawdown</div>
-        <div class="card-value">{{ m.maxDrawdown | currency:'USD':'symbol':'1.2-2' }}</div>
-    </div>
+<!-- Empty state -->
+<section class="th-empty" *ngIf="!selected(); else chart">
+    <p>Select a symbol to view historical performance.</p>
 </section>
 
+<ng-template #chart>
+    <svg class="th-chart" [attr.viewBox]="'0 0 ' + viewW + ' ' + viewH" [attr.width]="viewW" [attr.height]="viewH"
+        role="img" aria-label="Historical line chart">
 
-<section class="panel">
-    <div class="panel-title">Active Positions</div>
+        <!-- frame -->
+        <rect [attr.x]="padLeft" [attr.y]="padTop" [attr.width]="innerW()" [attr.height]="innerH()" class="frame"
+            rx="10" ry="10"></rect>
 
-    <ng-container *ngIf="positions$ | async as positions; else noPos">
-        <table class="tbl" *ngIf="positions.length; else noPos">
-            <thead>
-                <thead>
-                    <thead>
-                        <tr>
-                            <th>Symbol</th>
-                            <th>Qty</th>
-                            <th>Avg Price</th>
-                            <th>Last</th>
-                            <th>Cost Basis</th>
-                            <th>Market Value</th>
-                            <th>P/L</th>
-                            <th>P/L %</th>
-                            <th>SL</th>
-                            <th>TP</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
+        <!-- grid y -->
+        <g class="grid-y">
+            <line *ngFor="let t of yTicks()" [attr.x1]="padLeft" [attr.x2]="padLeft + innerW()" [attr.y1]="t.y"
+                [attr.y2]="t.y" />
+        </g>
 
-                </thead>
+        <!-- axis y labels -->
+        <g class="axis-y">
+            <text *ngFor="let t of yTicks()" [attr.x]="padLeft - 8" [attr.y]="t.y + 4" text-anchor="end">
+                {{ t.label }}
+            </text>
+        </g>
 
-            </thead>
-            <tbody>
-                <tr *ngFor="let p of positions">
-                    <td class="sym">{{ p.symbol }}</td>
-                    <td>{{ p.quantity | number:'1.0-4' }}</td>
-                    <td>{{ p.entryPrice | currency:'USD':'symbol':'1.2-2' }}</td>
-                    <td>{{ p.currentPrice | currency:'USD':'symbol':'1.2-2' }}</td>
-                    <td>{{ (p.entryPrice * p.quantity) | currency:'USD':'symbol':'1.2-2' }}</td>
-                    <td>{{ ((p.currentPrice ?? 0) * p.quantity) | currency:'USD':'symbol':'1.2-2' }}</td>
-                    <td [class.pos]="(p.unrealizedPnL ?? 0) >= 0" [class.neg]="(p.unrealizedPnL ?? 0) < 0">
-                        {{ p.unrealizedPnL | currency:'USD':'symbol':'1.2-2' }}
-                    </td>
-                    <td [class.pos]="(p.unrealizedPnL ?? 0) >= 0" [class.neg]="(p.unrealizedPnL ?? 0) < 0">
-                        {{ (p.unrealizedPnLPercent ?? 0) / 100 | percent:'1.1-2' }}
-                    </td>
-                    <td>{{ p.stopLoss != null ? (p.stopLoss | currency:'USD':'symbol':'1.2-2') : '—' }}</td>
-                    <td>{{ p.takeProfit != null ? (p.takeProfit | currency:'USD':'symbol':'1.2-2') : '—' }}</td>
-                    <td class="row-actions">
-                        <button class="btn btn-small" (click)="openRiskModal(p)">SL/TP</button>
-                        <button class="btn btn-small btn-danger" (click)="openCloseModal(p.symbol)">Close</button>
-                    </td>
-                </tr>
+        <!-- the line -->
+        <path class="series" [attr.d]="linePath()"></path>
 
-
-            </tbody>
-        </table>
-    </ng-container>
-
-    <ng-template #noPos>
-        <div class="empty">No active positions</div>
-    </ng-template>
-</section>
-
-<!-- Trade Entry Modal -->
-<app-trade-entry-modal *ngIf="showTradeModal" [symbol]="modalSymbol" (cancel)="cancelManualTrade()"
-    (save)="saveManualTrade($event)">
-</app-trade-entry-modal>
-
-<app-close-position-modal *ngIf="showCloseModal" [symbol]="closeSymbol || ''" (cancel)="cancelCloseModal()"
-    (save)="saveCloseModal($event)">
-</app-close-position-modal>
-
-<app-edit-risk-modal *ngIf="showRiskModal" [symbol]="riskSymbol || ''" [stopLoss]="riskStopLoss"
-    [takeProfit]="riskTakeProfit" (cancel)="cancelRiskModal()" (save)="saveRiskModal($event)">
-</app-edit-risk-modal>
+        <!-- x-axis labels -->
+        <g class="axis-x">
+            <text *ngFor="let t of xTicks()" [attr.x]="t.x" [attr.y]="viewH - padBottom + 18" text-anchor="middle">
+                {{ t.label }}
+            </text>
+        </g>
+    </svg>
+</ng-template>
