@@ -1,17 +1,19 @@
-/* Header/toolbars */
+/* Style 3: Glassmorphism - Modern, frosted glass effect */
+
 .th-toolbar {
   margin: 20px auto 18px;
   width: 95%;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column; /* Stack vertically */
+  align-items: center; /* Center horizontally */
+  gap: 16px; /* Space between rows */
 
   .symbols,
   .ranges {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
+    justify-content: center; /* Center the buttons */
   }
 
   .pill,
@@ -19,7 +21,8 @@
     padding: 8px 14px;
     border-radius: 999px;
     border: 1px solid rgba(148, 163, 184, 0.28);
-    background: #0b1220;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(10px);
     color: #e5e7eb;
     cursor: pointer;
     font-weight: 600;
@@ -34,61 +37,288 @@
   .range:hover {
     transform: translateY(-1px);
     border-color: #60a5fa;
+    background: rgba(15, 23, 42, 0.8);
   }
 
   .pill.active,
   .range.active {
-    background: #adff2f; /* lime-like accent you’ve used */
-    color: #0b1220;
-    border-color: #60a5fa;
+    background: rgba(173, 255, 47, 0.15);
+    backdrop-filter: blur(12px);
+    color: #adff2f;
+    border-color: #adff2f;
+  }
+
+  .range:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .loading-dot {
+    color: #60a5fa;
+    font-size: 13px;
+    animation: pulse 2s ease-in-out infinite;
   }
 }
 
-/* Empty state */
+/* Statistics Panel - Glass cards */
+.th-stats {
+  width: 95%;
+  margin: 0 auto 20px;
+  display: flex;
+  gap: 14px;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(16px);
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+
+  .stat-card {
+    flex: 1;
+    text-align: center;
+    padding: 14px 10px;
+    border-radius: 12px;
+    background: rgba(30, 41, 59, 0.3);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(30, 41, 59, 0.5);
+      border-color: rgba(96, 165, 250, 0.4);
+      transform: translateY(-2px);
+    }
+  }
+
+  .stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #94a3b8;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  .stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #f1f5f9;
+
+    &.positive {
+      color: #4ade80;
+    }
+
+    &.negative {
+      color: #f87171;
+    }
+  }
+}
+
+/* Empty state - Glass panel */
 .th-empty {
   width: 95%;
-  margin: 40px auto;
-  opacity: 0.7;
+  margin: 60px auto;
   text-align: center;
+  padding: 70px 20px;
+  background: rgba(15, 23, 42, 0.3);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+
+  .empty-icon {
+    font-size: 72px;
+    margin-bottom: 18px;
+    opacity: 0.7;
+  }
+
+  .empty-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin: 0 0 10px 0;
+  }
+
+  .empty-description {
+    font-size: 14px;
+    color: #94a3b8;
+    margin: 0;
+    max-width: 420px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+}
+
+/* Loading overlay - Glass with blur */
+.th-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 2.5%;
+  right: 2.5%;
+  bottom: 0;
+  background: rgba(11, 18, 32, 0.7);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  z-index: 10;
+
+  .skeleton-chart {
+    width: 80%;
+    max-width: 600px;
+    margin-bottom: 28px;
+  }
+
+  .skeleton-line {
+    height: 5px;
+    background: linear-gradient(
+      90deg,
+      rgba(148, 163, 184, 0.15) 0%,
+      rgba(148, 163, 184, 0.35) 50%,
+      rgba(148, 163, 184, 0.15) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite;
+    border-radius: 3px;
+    margin-bottom: 22px;
+    backdrop-filter: blur(4px);
+
+    &:nth-child(1) {
+      width: 100%;
+    }
+    &:nth-child(2) {
+      width: 78%;
+    }
+    &:nth-child(3) {
+      width: 62%;
+    }
+  }
+
+  .loading-text {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    color: #cbd5e1;
+    font-size: 15px;
+    font-weight: 500;
+  }
+
+  .loading-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(96, 165, 250, 0.2);
+    border-top-color: #60a5fa;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
 }
 
 /* SVG chart */
 .th-chart {
   display: block;
   margin: 0 auto 18px;
-  width: 95%;
+  width: 100%;
+  position: relative;
+  svg {
+    width: 100%;
+    height: auto;
+  }
 }
 
 .frame {
-  fill: #0b1220;
-  stroke: #adff2f;
-  stroke-width: 3;
-}
-
-/* gridlines */
-.grid-y line {
-  stroke: rgba(148, 163, 184, 0.14);
-  stroke-dasharray: 2 4;
-}
-
-/* line series */
-.series {
-  fill: none;
-  stroke: #60a5fa; /* sky-500 */
+  fill: rgba(11, 18, 32, 0.5);
+  stroke: rgba(173, 255, 47, 0.6);
   stroke-width: 2.5;
 }
 
-/* axes */
+.grid-y line {
+  stroke: rgba(148, 163, 184, 0.12);
+  stroke-dasharray: 2 5;
+}
+
+.series {
+  fill: none;
+  stroke: #60a5fa;
+  stroke-width: 2.5;
+}
+
 .axis-y text,
 .axis-x text {
-  fill: #cbd5e1; /* slate-300 */
+  fill: #cbd5e1;
   font-size: 12px;
 }
 
-.axis-y text {
-  dominant-baseline: middle;
+/* Crosshair - Subtle glass effect */
+.crosshair-line {
+  stroke: rgba(173, 255, 47, 0.5);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+  pointer-events: none;
 }
 
-.axis-x text {
-  dominant-baseline: hanging;
+.crosshair-point {
+  fill: #adff2f;
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 2;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(173, 255, 47, 0.5));
+}
+
+/* Tooltip - Frosted glass */
+.th-tooltip {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
+  padding: 12px 16px;
+  pointer-events: none;
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+  .tooltip-price {
+    font-size: 18px;
+    font-weight: 700;
+    color: #adff2f;
+    margin-bottom: 5px;
+  }
+
+  .tooltip-date {
+    font-size: 12px;
+    color: #e5e7eb;
+    margin-bottom: 2px;
+  }
+
+  .tooltip-time {
+    font-size: 11px;
+    color: #94a3b8;
+  }
+}
+
+/* Animations */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }

@@ -444,11 +444,11 @@ export class TradeHistoryComponent implements OnDestroy {
     const svg = event.currentTarget as SVGElement;
     const rect = svg.getBoundingClientRect();
 
-    // Get mouse position relative to SVG
+    // Get mouse position relative to SVG viewport coordinates
     const mouseX = event.clientX - rect.left;
     const mouseY = event.clientY - rect.top;
 
-    // Check if mouse is within the chart area
+    // Check if mouse is within the chart area (accounting for padding)
     const inBounds =
       mouseX >= this.padLeft &&
       mouseX <= this.padLeft + this.innerW() &&
@@ -490,10 +490,41 @@ export class TradeHistoryComponent implements OnDestroy {
       hour12: true,
     }).format(date);
 
-    // Update tooltip data
+    // Calculate tooltip position
+    // Use the data point position (pointX, pointY) which are in viewBox coordinates
+    // Add offsets to position tooltip near the crosshair point
+    const tooltipOffsetX = 15;
+    const tooltipOffsetY = -70;
+    const tooltipWidth = 120;
+    const tooltipHeight = 80;
+
+    let tooltipX = pointX + tooltipOffsetX;
+    let tooltipY = pointY + tooltipOffsetY;
+
+    // Adjust if tooltip would go off right edge of chart
+    if (tooltipX + tooltipWidth > this.padLeft + this.innerW()) {
+      tooltipX = pointX - tooltipWidth - 15; // Show on left of crosshair
+    }
+
+    // Adjust if tooltip would go off top edge of chart
+    if (tooltipY < this.padTop) {
+      tooltipY = pointY + 15; // Show below crosshair instead
+    }
+
+    // Adjust if tooltip would go off bottom edge of chart
+    if (tooltipY + tooltipHeight > this.padTop + this.innerH()) {
+      tooltipY = this.padTop + this.innerH() - tooltipHeight;
+    }
+
+    // Adjust if tooltip would go off left edge
+    if (tooltipX < this.padLeft) {
+      tooltipX = this.padLeft + 5;
+    }
+
+    // Update tooltip data with viewBox coordinates
     this.tooltipData.set({
-      x: pointX,
-      y: pointY,
+      x: tooltipX,
+      y: tooltipY,
       price: bar.close,
       date: dateStr,
       time: timeStr,

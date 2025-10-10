@@ -4,6 +4,7 @@ export const TRADING_SYMBOLS = [
   'AFRM', // Affirm - buy now pay later
   'AMD', // AMD - chips, high volatility
   'ARM', // ARM Holdings - AI chips
+  'ATON',
   'AVGO', // Broadcom - semiconductors
   'COIN', // Coinbase - crypto exchange
   'CRWD', // CrowdStrike - cybersecurity
@@ -13,6 +14,7 @@ export const TRADING_SYMBOLS = [
   'MSTR', // MicroStrategy - Bitcoin holder
   'NET', // Cloudflare - edge computing
   'NVDA', // NVIDIA - AI leader
+  'NXL',
   'PLTR', // Palantir - AI/data analytics
   'RBLX', // Roblox - gaming platform
   'RIOT', // Riot Platforms - Bitcoin miner
@@ -21,4 +23,5 @@ export const TRADING_SYMBOLS = [
   'SOFI', // SoFi - fintech, very volatile
   'TSLA', // Tesla - volatile EV leader
   'U', // Unity Software - game engine
+  'XBIO',
 ];
